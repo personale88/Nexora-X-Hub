@@ -19,14 +19,13 @@ import { NavTab, RepositoryData } from '@/lib/types';
 
 interface DashboardViewProps {
   onNavigate: (tab: NavTab) => void;
-  onStartDemoTour: () => void;
+  onStartDemoTour?: () => void;
   currentRepo?: RepositoryData;
   onOpenRepoModal?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
-  onStartDemoTour,
   currentRepo = ACTIVE_REPO,
   onOpenRepoModal,
 }) => {
@@ -93,7 +92,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-4">
-            {/* Primary Analyze Repository button: opens Repository selector & Git connector */}
             <button
               onClick={onOpenRepoModal ? onOpenRepoModal : () => onNavigate('repositories')}
               className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -101,14 +99,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <FolderGit2 className="w-4 h-4" />
               <span>Analyze Repository</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={onStartDemoTour}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold text-sm shadow-xs hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <Zap className="w-4 h-4 text-indigo-600" />
-              <span>View Demo</span>
             </button>
           </div>
         </div>

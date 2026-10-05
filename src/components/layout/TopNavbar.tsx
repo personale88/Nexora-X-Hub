@@ -3,16 +3,14 @@
 import React from 'react';
 import {
   GitBranch,
-  Play,
   Settings,
-  Sparkles,
   Code2,
   ChevronDown,
 } from 'lucide-react';
 import { RepositoryData } from '@/lib/types';
 
 interface TopNavbarProps {
-  onStartGuidedTour: () => void;
+  onStartGuidedTour?: () => void;
   openSettings: () => void;
   onOpenRepoModal?: () => void;
   currentRepo?: RepositoryData;
@@ -20,11 +18,9 @@ interface TopNavbarProps {
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
-  onStartGuidedTour,
   openSettings,
   onOpenRepoModal,
   currentRepo,
-  isTouring = false,
 }) => {
   const repoName = currentRepo?.name || 'commerce-api';
   const repoBranch = currentRepo?.branch || 'main';
@@ -61,29 +57,6 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           <Code2 className="w-3 h-3 text-indigo-600" />
           <span>iQOO Hackathon · Developer Tools</span>
         </div>
-
-        {/* 2-Minute Demo Flow Quick Button */}
-        <button
-          onClick={onStartGuidedTour}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all ${
-            isTouring
-              ? 'bg-amber-500 text-white font-bold animate-pulse shadow-md shadow-amber-500/25'
-              : 'bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white shadow-indigo-600/20 hover:shadow-sm'
-          }`}
-          title="Autoplay or restart the complete 2-minute judge walkthrough"
-        >
-          {isTouring ? (
-            <>
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Tour Active (Click Next)</span>
-            </>
-          ) : (
-            <>
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>2-Min Demo Walkthrough</span>
-            </>
-          )}
-        </button>
 
         {/* Settings button */}
         <button

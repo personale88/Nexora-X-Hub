@@ -90,23 +90,10 @@ export default function Home() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopNavbar
-          onStartGuidedTour={handleStartTour}
           openSettings={() => setIsSettingsOpen(true)}
           onOpenRepoModal={() => setIsConnectRepoOpen(true)}
           currentRepo={activeRepo}
-          isTouring={isTouring}
         />
-
-        {/* Guided Tour Banner (Shown when walkthrough is active) */}
-        {isTouring && (
-          <DemoTourBanner
-            currentStepIndex={currentTourStep}
-            onNext={handleNextTourStep}
-            onPrev={handlePrevTourStep}
-            onClose={() => setIsTouring(false)}
-            onActionClick={handleTourActionClick}
-          />
-        )}
 
         {/* Main View Router */}
         <main className="flex-1 p-6 md:p-8 overflow-y-auto">
@@ -116,7 +103,6 @@ export default function Home() {
                 setActiveTab(tab);
                 if (tab === 'verification') setHasVerifiedFix(true);
               }}
-              onStartDemoTour={handleStartTour}
               currentRepo={activeRepo}
               onOpenRepoModal={() => setIsConnectRepoOpen(true)}
             />
