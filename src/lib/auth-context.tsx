@@ -1,182 +1,129 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserProfile, AuthProvider } from './types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+
+export interface ClientUser {
+  id: string;
+  name: string;
+  email: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  providers: Array<'google' | 'github'>;
+  connectedAccounts: {
+    google: {
+      connected: boolean;
+      email: string | null;
+    };
+    github: {
+      connected: boolean;
+      username: string | null;
+      avatarUrl: string | null;
+      connectedAt: string | null;
+      scope: string | null;
+    };
+  };
+}
 
 interface AuthContextType {
-  user: UserProfile | null;
+  user: ClientUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  isAuthModalOpen: boolean;
-  activeAuthTab: AuthProvider;
-  openAuthModal: (defaultTab?: AuthProvider) => void;
-  closeAuthModal: () => void;
-  signInWithGoogle: (email: string, name?: string) => Promise<UserProfile>;
-  signInWithGit: (username?: string, token?: string) => Promise<UserProfile>;
-  requestMobileOtp: (phoneNumber: string) => Promise<{ success: boolean; testOtp: string; message: string }>;
-  verifyMobileOtp: (otpCode: string) => Promise<{ success: boolean; user?: UserProfile; error?: string }>;
-  signOut: () => void;
+  loginWithGoogle: () => void;
+  loginWithGitHub: () => void;
+  connectGitHub: () => void;
+  disconnectGitHub: () => Promise<boolean>;
+  logout: () => Promise<void>;
+  refreshSession: () => Promise<void>;
+  isSettingsOpen: boolean;
+  openSettings: (tab?: 'engine' | 'connected_accounts') => void;
+  closeSettings: () => void;
+  settingsTab: 'engine' | 'connected_accounts';
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'repopilot_auth_user';
-
 export const AuthProviderComponent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<ClientUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
-  const [activeAuthTab, setActiveAuthTab] = useState<AuthProvider>('google');
-  const [pendingMobilePhone, setPendingMobilePhone] = useState<string>('');
-  const [currentTestOtp, setCurrentTestOtp] = useState<string>('492815');
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [settingsTab, setSettingsTab] = useState<'engine' | 'connected_accounts'>('engine');
 
-  // Load persisted session from localStorage
-  useEffect(() => {
+  // Verify authenticated session via server-side HttpOnly cookie
+  const refreshSession = useCallback(async () => {
     try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (stored) {
-        setUser(JSON.parse(stored));
+      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
       } else {
         setUser(null);
       }
-    } catch (e) {
-      console.warn('Could not read auth user from storage', e);
+    } catch (err) {
+      console.warn('Session verification check failed:', err);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const saveUserSession = (newUser: UserProfile) => {
-    setUser(newUser);
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
+
+  const loginWithGoogle = () => {
+    window.location.href = '/api/auth/google';
+  };
+
+  const loginWithGitHub = () => {
+    window.location.href = '/api/auth/github';
+  };
+
+  const connectGitHub = () => {
+    window.location.href = '/api/github/connect';
+  };
+
+  const disconnectGitHub = async (): Promise<boolean> => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newUser));
-    } catch (e) {
-      console.warn('Could not save user to localStorage', e);
+      const res = await fetch('/api/github/disconnect', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (res.ok) {
+        await refreshSession();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to disconnect GitHub:', err);
+      return false;
     }
   };
 
-  const openAuthModal = (defaultTab: AuthProvider = 'google') => {
-    setActiveAuthTab(defaultTab);
-    setIsAuthModalOpen(true);
-  };
-
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
-  };
-
-  // 1. REAL GOOGLE AUTHENTICATION
-  const signInWithGoogle = async (
-    email: string,
-    name?: string
-  ): Promise<UserProfile> => {
-    if (!email || !email.includes('@')) {
-      throw new Error('Please enter a valid Google email address');
-    }
-
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'google',
-        email,
-        name,
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      throw new Error(data.error || 'Google authentication failed');
-    }
-
-    saveUserSession(data.user);
-    setIsAuthModalOpen(false);
-    return data.user;
-  };
-
-  // 2. REAL GIT / GITHUB AUTHENTICATION
-  const signInWithGit = async (username?: string, token?: string): Promise<UserProfile> => {
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'github',
-        username,
-        token,
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      throw new Error(data.error || 'GitHub authentication failed');
-    }
-
-    saveUserSession(data.user);
-    setIsAuthModalOpen(false);
-    return data.user;
-  };
-
-  // 3. REAL MOBILE AUTHENTICATION - REQUEST OTP
-  const requestMobileOtp = async (
-    phoneNumber: string
-  ): Promise<{ success: boolean; testOtp: string; message: string }> => {
-    setPendingMobilePhone(phoneNumber);
-
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'mobile_request_otp',
-        phone: phoneNumber,
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      throw new Error(data.error || 'Could not send verification code');
-    }
-
-    setCurrentTestOtp(data.testOtp || '492815');
-    return {
-      success: true,
-      testOtp: data.testOtp || '492815',
-      message: data.message,
-    };
-  };
-
-  // 3. REAL MOBILE AUTHENTICATION - VERIFY OTP
-  const verifyMobileOtp = async (
-    otpCode: string
-  ): Promise<{ success: boolean; user?: UserProfile; error?: string }> => {
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'mobile_verify_otp',
-        phone: pendingMobilePhone,
-        otp: otpCode,
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      return {
-        success: false,
-        error: data.error || 'Invalid verification code',
-      };
-    }
-
-    saveUserSession(data.user);
-    setIsAuthModalOpen(false);
-    return { success: true, user: data.user };
-  };
-
-  const signOut = () => {
-    setUser(null);
+  const logout = async () => {
     try {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-    } catch (e) {
-      console.warn('Could not clear auth user from storage', e);
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setUser(null);
+      window.location.href = '/';
     }
+  };
+
+  const openSettings = (tab: 'engine' | 'connected_accounts' = 'engine') => {
+    setSettingsTab(tab);
+    setIsSettingsOpen(true);
+  };
+
+  const closeSettings = () => {
+    setIsSettingsOpen(false);
   };
 
   return (
@@ -185,15 +132,16 @@ export const AuthProviderComponent: React.FC<{ children: React.ReactNode }> = ({
         user,
         isAuthenticated: !!user,
         isLoading,
-        isAuthModalOpen,
-        activeAuthTab,
-        openAuthModal,
-        closeAuthModal,
-        signInWithGoogle,
-        signInWithGit,
-        requestMobileOtp,
-        verifyMobileOtp,
-        signOut,
+        loginWithGoogle,
+        loginWithGitHub,
+        connectGitHub,
+        disconnectGitHub,
+        logout,
+        refreshSession,
+        isSettingsOpen,
+        openSettings,
+        closeSettings,
+        settingsTab,
       }}
     >
       {children}

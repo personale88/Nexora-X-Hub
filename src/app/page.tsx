@@ -10,69 +10,52 @@ import { InvestigationView } from '@/components/views/InvestigationView';
 import { FixView } from '@/components/views/FixView';
 import { VerificationView } from '@/components/views/VerificationView';
 import { HistoryView } from '@/components/views/HistoryView';
+import { LoginLandingView } from '@/components/views/LoginLandingView';
 import { PullRequestModal } from '@/components/modals/PullRequestModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
-import { ConnectRepoModal } from '@/components/modals/ConnectRepoModal';
-import { AuthModal } from '@/components/modals/AuthModal';
+import { YourRepositoriesModal } from '@/components/modals/YourRepositoriesModal';
 import { ACTIVE_REPO } from '@/lib/mock-data';
 import { NavTab, RepositoryData } from '@/lib/types';
+import { useAuth } from '@/lib/auth-context';
+import { Loader2 } from 'lucide-react';
 
 export default function Home() {
+  const {
+    isAuthenticated,
+    isLoading,
+    isSettingsOpen,
+    openSettings,
+    closeSettings,
+    settingsTab,
+  } = useAuth();
+
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [activeRepo, setActiveRepo] = useState<RepositoryData>(ACTIVE_REPO);
   const [isTouring, setIsTouring] = useState<boolean>(false);
   const [currentTourStep, setCurrentTourStep] = useState<number>(0);
   const [isPRModalOpen, setIsPRModalOpen] = useState<boolean>(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isConnectRepoOpen, setIsConnectRepoOpen] = useState<boolean>(false);
   const [hasVerifiedFix, setHasVerifiedFix] = useState<boolean>(false);
   const [, setEngineRefresh] = useState(0);
 
-  // Guided demo tour handlers
-  const handleStartTour = () => {
-    setIsTouring(true);
-    setCurrentTourStep(0);
-    setActiveTab(TOUR_STEPS[0].tab);
-  };
+  // 1. Loading State while session is verified
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 space-y-3">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+        <span className="text-xs font-semibold text-slate-500 font-mono">
+          Connecting securely...
+        </span>
+      </div>
+    );
+  }
 
-  const handleNextTourStep = () => {
-    if (currentTourStep < TOUR_STEPS.length - 1) {
-      const nextIdx = currentTourStep + 1;
-      setCurrentTourStep(nextIdx);
-      setActiveTab(TOUR_STEPS[nextIdx].tab);
-    } else {
-      setIsTouring(false);
-    }
-  };
+  // 2. Unauthenticated state: Route protection -> Landing Login View
+  if (!isAuthenticated) {
+    return <LoginLandingView />;
+  }
 
-  const handlePrevTourStep = () => {
-    if (currentTourStep > 0) {
-      const prevIdx = currentTourStep - 1;
-      setCurrentTourStep(prevIdx);
-      setActiveTab(TOUR_STEPS[prevIdx].tab);
-    }
-  };
-
-  const handleTourActionClick = () => {
-    const step = TOUR_STEPS[currentTourStep];
-    if (step.step === 1) {
-      setActiveTab('repositories');
-      setCurrentTourStep(1);
-    } else if (step.step === 2) {
-      setActiveTab('issues');
-      setCurrentTourStep(2);
-    } else if (step.step === 3) {
-      setActiveTab('fix');
-      setCurrentTourStep(3);
-    } else if (step.step === 4) {
-      setActiveTab('verification');
-      setCurrentTourStep(4);
-    } else if (step.step === 5) {
-      setIsPRModalOpen(true);
-      setHasVerifiedFix(true);
-    }
-  };
-
+  // 3. Authenticated state: RepoPilot Workspace & Dashboard
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-row selection:bg-indigo-100 selection:text-indigo-900">
       {/* Sidebar Navigation */}
@@ -84,14 +67,14 @@ export default function Home() {
             setHasVerifiedFix(true);
           }
         }}
-        openSettings={() => setIsSettingsOpen(true)}
+        openSettings={() => openSettings('engine')}
         hasVerifiedFix={hasVerifiedFix}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopNavbar
-          openSettings={() => setIsSettingsOpen(true)}
+          openSettings={(tab) => openSettings(tab || 'engine')}
           onOpenRepoModal={() => setIsConnectRepoOpen(true)}
           currentRepo={activeRepo}
         />
@@ -158,8 +141,8 @@ export default function Home() {
         </main>
       </div>
 
-      {/* Select & Connect Repository Modal */}
-      <ConnectRepoModal
+      {/* Your Authorized Repositories Selection Modal */}
+      <YourRepositoriesModal
         isOpen={isConnectRepoOpen}
         onClose={() => setIsConnectRepoOpen(false)}
         currentRepoId={activeRepo.id}
@@ -180,15 +163,13 @@ export default function Home() {
         }}
       />
 
-      {/* Settings / AI Engine Configuration Modal */}
+      {/* Settings / AI Engine & Connected Accounts Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={closeSettings}
+        initialTab={settingsTab}
         onUpdated={() => setEngineRefresh((prev) => prev + 1)}
       />
-
-      {/* Authentication Modal (Google, Git, Mobile OTP) */}
-      <AuthModal />
     </div>
   );
 }

@@ -13,9 +13,11 @@ import {
   Zap,
   FolderGit2,
   RefreshCw,
+  GitBranch,
 } from 'lucide-react';
 import { ACTIVE_REPO } from '@/lib/mock-data';
 import { NavTab, RepositoryData } from '@/lib/types';
+import { useAuth } from '@/lib/auth-context';
 
 interface DashboardViewProps {
   onNavigate: (tab: NavTab) => void;
@@ -29,6 +31,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   currentRepo = ACTIVE_REPO,
   onOpenRepoModal,
 }) => {
+  const { user, connectGitHub } = useAuth();
+  const isGitHubConnected = Boolean(user?.connectedAccounts?.github?.connected);
+  const ghUsername = user?.connectedAccounts?.github?.username;
   const workflowSteps = [
     {
       id: 'understand',
@@ -77,28 +82,66 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="relative z-10 max-w-3xl">
           {/* Header pill */}
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold mb-6 shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>RepoPilot AI · From bug report to verified fix.</span>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold shadow-xs">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Welcome back, {user?.name || 'Developer'}</span>
+            </div>
+
+            {/* Connected GitHub indicator */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-medium text-slate-700 shadow-2xs">
+              <span className="text-slate-500 font-semibold">Connected GitHub:</span>
+              {isGitHubConnected ? (
+                <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  ● Connected {ghUsername ? `(@${ghUsername})` : ''}
+                </span>
+              ) : (
+                <button
+                  onClick={connectGitHub}
+                  className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                >
+                  <span>○ Connect GitHub</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-[1.15] mb-4">
             Your AI software engineer.
           </h1>
 
-          <p className="text-lg text-slate-600 font-normal leading-relaxed mb-8">
+          <p className="text-lg text-slate-600 font-normal leading-relaxed mb-6">
             Understand repositories, diagnose bugs, generate fixes, write regression tests, and verify solutions.
           </p>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-4">
+          {/* Connected Active Repository Status & Analyze Action */}
+          <div className="flex flex-wrap items-center gap-4 bg-white/80 backdrop-blur-xs p-4 rounded-2xl border border-slate-200 shadow-xs mb-2">
+            <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                <FolderGit2 className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Active Repository
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-slate-900">{currentRepo.name}</span>
+                  <span className="text-xs text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
+                    <GitBranch className="w-3 h-3 text-indigo-600" />
+                    {currentRepo.branch}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <button
               onClick={onOpenRepoModal ? onOpenRepoModal : () => onNavigate('repositories')}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
             >
               <FolderGit2 className="w-4 h-4" />
               <span>Analyze Repository</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
             </button>
           </div>
         </div>

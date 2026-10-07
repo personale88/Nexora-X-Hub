@@ -34,7 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   hasVerifiedFix = false,
 }) => {
   const engineStatus = aiEngine.getStatus();
-  const { user, isAuthenticated, openAuthModal } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const navItems = [
     {
@@ -152,16 +152,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Bottom Auth & AI Engine Section */}
       <div className="p-3 border-t border-slate-200 bg-slate-50/60 space-y-2">
         {/* User Auth Card */}
-        {isAuthenticated && user ? (
+        {isAuthenticated && user && (
           <div
-            onClick={() => openAuthModal()}
+            onClick={openSettings}
             className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all hover:border-indigo-300 shadow-2xs flex items-center justify-between group"
-            title="Click to switch sign-in method or profile"
+            title="Click to view Connected Accounts & Settings"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              {user.avatar ? (
+              {user.avatarUrl ? (
                 <img
-                  src={user.avatar}
+                  src={user.avatarUrl}
                   alt={user.name}
                   className="w-7 h-7 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
                 />
@@ -174,31 +174,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="text-xs font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
                   {user.name}
                 </div>
-                <div className="text-[10px] text-slate-500 truncate capitalize">
-                  {user.provider === 'git'
-                    ? 'GitHub Verified'
-                    : user.provider === 'google'
-                    ? 'Google OAuth'
-                    : 'Mobile OTP'}
+                <div className="text-[10px] text-slate-500 truncate">
+                  {user.connectedAccounts?.github?.connected
+                    ? `GitHub (@${user.connectedAccounts.github.username})`
+                    : user.email || 'OAuth Session'}
                 </div>
               </div>
             </div>
 
             <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs shrink-0"></span>
           </div>
-        ) : (
-          <button
-            onClick={() => openAuthModal('google')}
-            className="w-full p-2.5 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer transition-all text-left flex items-center justify-between group"
-          >
-            <div className="flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="text-xs font-semibold text-indigo-900">Sign In</span>
-            </div>
-            <span className="text-[10px] font-medium text-indigo-600 group-hover:translate-x-0.5 transition-transform">
-              Google/Git/SMS →
-            </span>
-          </button>
         )}
 
         {/* AI Engine Card */}
