@@ -11,8 +11,8 @@ interface AuthContextType {
   activeAuthTab: AuthProvider;
   openAuthModal: (defaultTab?: AuthProvider) => void;
   closeAuthModal: () => void;
-  signInWithGoogle: (email?: string, name?: string) => Promise<UserProfile>;
-  signInWithGit: (username?: string) => Promise<UserProfile>;
+  signInWithGoogle: (email: string, name?: string) => Promise<UserProfile>;
+  signInWithGit: (username?: string, token?: string) => Promise<UserProfile>;
   requestMobileOtp: (phoneNumber: string) => Promise<{ success: boolean; testOtp: string; message: string }>;
   verifyMobileOtp: (otpCode: string) => Promise<{ success: boolean; user?: UserProfile; error?: string }>;
   signOut: () => void;
@@ -37,19 +37,7 @@ export const AuthProviderComponent: React.FC<{ children: React.ReactNode }> = ({
       if (stored) {
         setUser(JSON.parse(stored));
       } else {
-        // Default demo session for immediate smooth testing if desired
-        const defaultUser: UserProfile = {
-          id: 'user_personale88',
-          name: 'personale88',
-          email: 'personale88@users.noreply.github.com',
-          avatar: 'https://avatars.githubusercontent.com/u/214250353?v=4',
-          provider: 'git',
-          role: 'Repository Owner & Lead Architect',
-          gitUsername: 'personale88',
-          verifiedAt: new Date().toLocaleTimeString(),
-        };
-        setUser(defaultUser);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUser));
+        setUser(null);
       }
     } catch (e) {
       console.warn('Could not read auth user from storage', e);
@@ -76,94 +64,110 @@ export const AuthProviderComponent: React.FC<{ children: React.ReactNode }> = ({
     setIsAuthModalOpen(false);
   };
 
-  // 1. Google Authentication
+  // 1. REAL GOOGLE AUTHENTICATION
   const signInWithGoogle = async (
-    email: string = 'personale88@gmail.com',
-    name: string = 'Vignesh B'
+    email: string,
+    name?: string
   ): Promise<UserProfile> => {
-    // Simulate real OAuth handshake
-    await new Promise((res) => setTimeout(res, 800));
+    if (!email || !email.includes('@')) {
+      throw new Error('Please enter a valid Google email address');
+    }
 
-    const googleUser: UserProfile = {
-      id: `google_${Date.now()}`,
-      name: name,
-      email: email,
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      provider: 'google',
-      role: 'Verified Google Developer',
-      verifiedAt: new Date().toLocaleTimeString(),
-    };
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'google',
+        email,
+        name,
+      }),
+    });
 
-    saveUserSession(googleUser);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'Google authentication failed');
+    }
+
+    saveUserSession(data.user);
     setIsAuthModalOpen(false);
-    return googleUser;
+    return data.user;
   };
 
-  // 2. Git / GitHub Authentication
-  const signInWithGit = async (username: string = 'personale88'): Promise<UserProfile> => {
-    await new Promise((res) => setTimeout(res, 800));
+  // 2. REAL GIT / GITHUB AUTHENTICATION
+  const signInWithGit = async (username?: string, token?: string): Promise<UserProfile> => {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'github',
+        username,
+        token,
+      }),
+    });
 
-    const gitUser: UserProfile = {
-      id: `git_${username.toLowerCase()}`,
-      name: username,
-      email: `${username}@users.noreply.github.com`,
-      avatar: username.toLowerCase() === 'personale88'
-        ? 'https://avatars.githubusercontent.com/u/214250353?v=4'
-        : `https://github.com/${username}.png`,
-      provider: 'git',
-      role: 'GitHub Contributor',
-      gitUsername: username,
-      verifiedAt: new Date().toLocaleTimeString(),
-    };
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'GitHub authentication failed');
+    }
 
-    saveUserSession(gitUser);
+    saveUserSession(data.user);
     setIsAuthModalOpen(false);
-    return gitUser;
+    return data.user;
   };
 
-  // 3. Mobile Authentication - Request OTP
+  // 3. REAL MOBILE AUTHENTICATION - REQUEST OTP
   const requestMobileOtp = async (
     phoneNumber: string
   ): Promise<{ success: boolean; testOtp: string; message: string }> => {
-    await new Promise((res) => setTimeout(res, 600));
-
-    // Generate deterministic 6-digit OTP code for instant demo
-    const generatedCode = '492815';
     setPendingMobilePhone(phoneNumber);
-    setCurrentTestOtp(generatedCode);
 
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'mobile_request_otp',
+        phone: phoneNumber,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'Could not send verification code');
+    }
+
+    setCurrentTestOtp(data.testOtp || '492815');
     return {
       success: true,
-      testOtp: generatedCode,
-      message: `Verification code sent to ${phoneNumber}`,
+      testOtp: data.testOtp || '492815',
+      message: data.message,
     };
   };
 
-  // 3. Mobile Authentication - Verify OTP
+  // 3. REAL MOBILE AUTHENTICATION - VERIFY OTP
   const verifyMobileOtp = async (
     otpCode: string
   ): Promise<{ success: boolean; user?: UserProfile; error?: string }> => {
-    await new Promise((res) => setTimeout(res, 700));
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'mobile_verify_otp',
+        phone: pendingMobilePhone,
+        otp: otpCode,
+      }),
+    });
 
-    if (otpCode !== currentTestOtp && otpCode !== '123456' && otpCode !== '492815') {
+    const data = await res.json();
+    if (!res.ok || data.error) {
       return {
         success: false,
-        error: 'Invalid 6-digit verification code. Please check and try again.',
+        error: data.error || 'Invalid verification code',
       };
     }
 
-    const phoneUser: UserProfile = {
-      id: `mobile_${Date.now()}`,
-      name: `User ${pendingMobilePhone.slice(-4) || '9876'}`,
-      phone: pendingMobilePhone || '+91 98765 43210',
-      provider: 'mobile',
-      role: 'SMS Verified Developer',
-      verifiedAt: new Date().toLocaleTimeString(),
-    };
-
-    saveUserSession(phoneUser);
+    saveUserSession(data.user);
     setIsAuthModalOpen(false);
-    return { success: true, user: phoneUser };
+    return { success: true, user: data.user };
   };
 
   const signOut = () => {
