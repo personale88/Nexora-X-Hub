@@ -12,9 +12,13 @@ import {
   Sparkles,
   ChevronRight,
   Terminal,
+  Lock,
+  Smartphone,
+  User,
 } from 'lucide-react';
 import { NavTab } from '@/lib/types';
 import { aiEngine } from '@/lib/ai-engine';
+import { useAuth } from '@/lib/auth-context';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -30,6 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   hasVerifiedFix = false,
 }) => {
   const engineStatus = aiEngine.getStatus();
+  const { user, isAuthenticated, openAuthModal } = useAuth();
 
   const navItems = [
     {
@@ -144,25 +149,76 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Bottom AI Engine Card */}
-      <div className="p-3 border-t border-slate-200 bg-slate-50/60">
+      {/* Bottom Auth & AI Engine Section */}
+      <div className="p-3 border-t border-slate-200 bg-slate-50/60 space-y-2">
+        {/* User Auth Card */}
+        {isAuthenticated && user ? (
+          <div
+            onClick={() => openAuthModal()}
+            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all hover:border-indigo-300 shadow-2xs flex items-center justify-between group"
+            title="Click to switch sign-in method or profile"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {user.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  className="w-7 h-7 rounded-full object-cover ring-1 ring-slate-200 shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
+                  {user.name}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate capitalize">
+                  {user.provider === 'git'
+                    ? 'GitHub Verified'
+                    : user.provider === 'google'
+                    ? 'Google OAuth'
+                    : 'Mobile OTP'}
+                </div>
+              </div>
+            </div>
+
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs shrink-0"></span>
+          </div>
+        ) : (
+          <button
+            onClick={() => openAuthModal('google')}
+            className="w-full p-2.5 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer transition-all text-left flex items-center justify-between group"
+          >
+            <div className="flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="text-xs font-semibold text-indigo-900">Sign In</span>
+            </div>
+            <span className="text-[10px] font-medium text-indigo-600 group-hover:translate-x-0.5 transition-transform">
+              Google/Git/SMS →
+            </span>
+          </button>
+        )}
+
+        {/* AI Engine Card */}
         <div
           onClick={openSettings}
-          className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all hover:border-slate-300 shadow-xs group"
+          className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all hover:border-slate-300 shadow-xs group"
         >
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-indigo-600" />
               <span className="text-[11px] font-semibold text-slate-700">AI Engine</span>
             </div>
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               {engineStatus.label}
             </span>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span className="truncate max-w-[150px]">Deterministic Zero-Fail</span>
+          <div className="flex items-center justify-between text-[10px] text-slate-500">
+            <span className="truncate max-w-[140px]">Zero-Fail AST Analyzer</span>
             <Sparkles className="w-3 h-3 text-indigo-500 group-hover:rotate-12 transition-transform" />
           </div>
         </div>

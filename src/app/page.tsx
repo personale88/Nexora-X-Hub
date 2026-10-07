@@ -13,6 +13,7 @@ import { HistoryView } from '@/components/views/HistoryView';
 import { PullRequestModal } from '@/components/modals/PullRequestModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { ConnectRepoModal } from '@/components/modals/ConnectRepoModal';
+import { AuthModal } from '@/components/modals/AuthModal';
 import { ACTIVE_REPO } from '@/lib/mock-data';
 import { NavTab, RepositoryData } from '@/lib/types';
 
@@ -185,6 +186,9 @@ export default function Home() {
         onClose={() => setIsSettingsOpen(false)}
         onUpdated={() => setEngineRefresh((prev) => prev + 1)}
       />
+
+      {/* Authentication Modal (Google, Git, Mobile OTP) */}
+      <AuthModal />
     </div>
   );
 }

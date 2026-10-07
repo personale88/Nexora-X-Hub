@@ -123,3 +123,17 @@ export interface HistoryItem {
   repository: string;
   file: string;
 }
+
+export type AuthProvider = 'google' | 'git' | 'mobile';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  avatar?: string;
+  provider: AuthProvider;
+  role: string;
+  gitUsername?: string;
+  verifiedAt: string;
+}
