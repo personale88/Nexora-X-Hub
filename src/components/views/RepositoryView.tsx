@@ -15,6 +15,7 @@ import {
   Layers,
   FileJson,
   FolderGit2,
+  Zap,
 } from 'lucide-react';
 import { ACTIVE_REPO, REPO_FILE_TREE, PRIMARY_ISSUE } from '@/lib/mock-data';
 import { FileNode, NavTab, RepositoryData } from '@/lib/types';
@@ -27,6 +28,7 @@ interface RepositoryViewProps {
 }
 
 export const RepositoryView: React.FC<RepositoryViewProps> = ({
+  onNavigate,
   onInvestigateIssue,
   currentRepo = ACTIVE_REPO,
   onOpenRepoModal,
@@ -299,14 +301,24 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onInvestigateIssue}
-            className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-700 hover:to-indigo-700 text-white font-semibold text-sm shadow-md shadow-rose-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Investigate with AI</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+            <button
+              onClick={() => onNavigate('live-fix')}
+              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+            >
+              <Zap className="w-4 h-4 text-cyan-300" />
+              <span>Watch Live Fix &amp; Learn</span>
+            </button>
+
+            <button
+              onClick={onInvestigateIssue}
+              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-md shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+            >
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <span>Investigate Issue</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -329,7 +341,7 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
 
         {/* Code Preview Column */}
         <div className="lg:col-span-8 rounded-xl bg-white border border-slate-200 shadow-xs overflow-hidden flex flex-col">
-          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-rose-400" />
               <span className="w-3 h-3 rounded-full bg-amber-400" />
@@ -340,9 +352,18 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
             </div>
 
             {selectedFile?.hasIssue && (
-              <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
-                AUTH-104 Vulnerability Detected Here
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                  AUTH-104 Vulnerability Detected Here
+                </span>
+                <button
+                  onClick={() => onNavigate('live-fix')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-xs transition-colors"
+                >
+                  <Zap className="w-3 h-3 text-cyan-300" />
+                  <span>Fix Live</span>
+                </button>
+              </div>
             )}
           </div>
 

@@ -10,6 +10,7 @@ import {
   Sparkles,
   Copy,
   Check,
+  Zap,
 } from 'lucide-react';
 import { PRIMARY_ISSUE, PRIMARY_PATCH } from '@/lib/mock-data';
 import { NavTab } from '@/lib/types';
@@ -21,6 +22,7 @@ interface InvestigationViewProps {
 
 export const InvestigationView: React.FC<InvestigationViewProps> = ({
   onGenerateFix,
+  onNavigate,
 }) => {
   const [diffViewMode, setDiffViewMode] = useState<'split' | 'unified'>('split');
   const [copied, setCopied] = useState(false);
@@ -92,14 +94,24 @@ export const InvestigationView: React.FC<InvestigationViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onGenerateFix}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-700 hover:to-indigo-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all self-start md:self-auto"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Generate Fix</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 self-start md:self-auto">
+          <button
+            onClick={() => onNavigate('live-fix')}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+          >
+            <Zap className="w-4 h-4 text-cyan-300" />
+            <span>Watch Live Fix &amp; Learn</span>
+          </button>
+
+          <button
+            onClick={onGenerateFix}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-md shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
+          >
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <span>Generate Fix</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* AI Reasoning Timeline */}
@@ -186,6 +198,27 @@ export const InvestigationView: React.FC<InvestigationViewProps> = ({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Live Bug Fix & Learner Mode Callout */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20 shrink-0">
+            <Zap className="w-5 h-5 text-cyan-300 animate-pulse" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold tracking-tight">Interactive Live Bug Healing &amp; Learning Studio</h4>
+            <p className="text-xs text-indigo-200">Watch the AI pinpoint the exact line, dissolve the bug in real-time, and explain how to prevent it.</p>
+          </div>
+        </div>
+        <button
+          onClick={() => onNavigate('live-fix')}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-indigo-900 hover:bg-indigo-50 font-bold text-xs shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0"
+        >
+          <Zap className="w-3.5 h-3.5 text-indigo-600" />
+          <span>Launch Live Fix Player</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {/* CODE DIFF (Visually Impressive Split or Unified) */}

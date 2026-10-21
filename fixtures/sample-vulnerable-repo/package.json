@@ -1,0 +1,9 @@
+{
+  "name": "sample-vulnerable-repo",
+  "version": "1.0.0",
+  "description": "Deterministic vulnerable sample repository for RepoPilot autonomous repair verification",
+  "main": "src/middleware/auth.js",
+  "scripts": {
+    "test": "node --test tests/auth.test.js"
+  }
+}

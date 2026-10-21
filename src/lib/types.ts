@@ -1,4 +1,4 @@
-export type NavTab = 'dashboard' | 'repositories' | 'issues' | 'fix' | 'verification' | 'history';
+export type NavTab = 'dashboard' | 'repositories' | 'issues' | 'fix' | 'verification' | 'history' | 'live-fix';
 
 export interface FileNode {
   name: string;
@@ -136,4 +136,94 @@ export interface UserProfile {
   role: string;
   gitUsername?: string;
   verifiedAt: string;
+}
+
+export type RepairJobStatus =
+  | 'QUEUED'
+  | 'INITIALIZING'
+  | 'REPRODUCING'
+  | 'INVESTIGATING'
+  | 'DIAGNOSING'
+  | 'PATCHING'
+  | 'TESTING'
+  | 'VERIFYING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'NEEDS_REVIEW';
+
+export interface RepairEvent {
+  eventId: string;
+  jobId: string;
+  sequence: number;
+  type: string;
+  timestamp: string;
+  stage: string;
+  message: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface RepairJobDiagnosis {
+  rootCause: string;
+  affectedFile: string;
+  startLine: number;
+  endLine: number;
+  explanation: string;
+  flawExplanation?: string;
+  attackScenario?: string;
+  fixRationale?: string;
+  rule?: string;
+  confidence: number;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+}
+
+export interface RepairJobPatch {
+  file: string;
+  beforeCode: string;
+  afterCode: string;
+  unifiedDiff: string;
+  additions: number;
+  deletions: number;
+  explanation: string;
+  appliedSuccessfully: boolean;
+}
+
+export interface RepairJobTestRun {
+  command: string;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  timestamp: string;
+  stage: 'reproduction' | 'verification' | 'regression';
+  passed: boolean;
+}
+
+export interface RepairJob {
+  id: string;
+  userId: string;
+  repository: {
+    owner: string;
+    name: string;
+    branch: string;
+    gitUrl: string;
+    pinnedCommitSha: string;
+    localPath?: string;
+  };
+  issueDescription: string;
+  issueCode?: string;
+  reproductionEvidence?: string;
+  status: RepairJobStatus;
+  currentStage: string;
+  diagnosis?: RepairJobDiagnosis;
+  proposedPatch?: RepairJobPatch;
+  testRuns: RepairJobTestRun[];
+  retryCount: number;
+  maxRetries: number;
+  verificationOutcome: 'VERIFIED' | 'FAILED' | 'INCOMPLETE' | 'NEEDS_REVIEW';
+  unresolvedRisks: string[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  error?: string;
 }

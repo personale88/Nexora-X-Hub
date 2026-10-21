@@ -38,36 +38,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     {
       id: 'understand',
       label: 'UNDERSTAND',
-      detail: 'AST & Dependencies',
+      detail: 'AST & Structure',
       icon: Search,
       tab: 'repositories' as NavTab,
     },
     {
       id: 'diagnose',
       label: 'DIAGNOSE',
-      detail: 'Root-Cause Analysis',
+      detail: 'Root-Cause Pinpoint',
       icon: AlertTriangle,
       tab: 'issues' as NavTab,
     },
     {
-      id: 'fix',
-      label: 'FIX',
-      detail: 'Surgical Patch',
+      id: 'live-fix',
+      label: 'LIVE HEAL & LEARN',
+      detail: 'Real-Time Fix Player',
+      icon: Zap,
+      tab: 'live-fix' as NavTab,
+    },
+    {
+      id: 'patch',
+      label: 'SURGICAL PATCH',
+      detail: 'Regression Suite',
       icon: FileCode2,
       tab: 'fix' as NavTab,
     },
     {
-      id: 'test',
-      label: 'TEST',
-      detail: 'Regression Suite',
-      icon: ShieldCheck,
-      tab: 'fix' as NavTab,
-    },
-    {
       id: 'verify',
-      label: 'VERIFY',
-      detail: 'Deterministic Sandbox',
-      icon: CheckCircle2,
+      label: 'VERIFY & PR',
+      detail: 'Closed-Loop Sandbox',
+      icon: ShieldCheck,
       tab: 'verification' as NavTab,
     },
   ];
@@ -310,13 +310,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
 
-            <button
-              onClick={() => onNavigate('issues')}
-              className="flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm shadow-md shadow-rose-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <AlertTriangle className="w-4 h-4" />
-              <span>Investigate Issue</span>
-            </button>
+            <div className="flex flex-col gap-2 shrink-0">
+              <button
+                onClick={() => onNavigate('live-fix')}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-300" />
+                <span>Watch Live Fix &amp; Learn</span>
+              </button>
+
+              <button
+                onClick={() => onNavigate('issues')}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Investigate Issue</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

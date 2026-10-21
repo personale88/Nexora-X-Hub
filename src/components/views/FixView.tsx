@@ -9,6 +9,7 @@ import {
   Check,
   Activity,
   Cpu,
+  Zap,
 } from 'lucide-react';
 import { PRIMARY_PATCH, PRIMARY_REGRESSION_TEST } from '@/lib/mock-data';
 import { NavTab } from '@/lib/types';
@@ -20,6 +21,7 @@ interface FixViewProps {
 
 export const FixView: React.FC<FixViewProps> = ({
   onVerifyFix,
+  onNavigate,
 }) => {
   const [copiedTest, setCopiedTest] = useState(false);
   const [copiedPatch, setCopiedPatch] = useState(false);
@@ -64,14 +66,24 @@ export const FixView: React.FC<FixViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onVerifyFix}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 via-indigo-600 to-emerald-600 hover:from-cyan-700 hover:to-emerald-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all self-start md:self-auto"
-        >
-          <ShieldCheck className="w-4 h-4" />
-          <span>Verify Fix in Sandbox</span>
-          <ArrowRight className="w-4 h-4" />
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 self-start md:self-auto">
+          <button
+            onClick={() => onNavigate('live-fix')}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm border border-indigo-200 shadow-xs transition-all"
+          >
+            <Zap className="w-4 h-4 text-indigo-600" />
+            <span>Watch Live Fix Player</span>
+          </button>
+
+          <button
+            onClick={onVerifyFix}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 via-indigo-600 to-emerald-600 hover:from-cyan-700 hover:to-emerald-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Verify Fix in Sandbox</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* AI Agent Progress Log */}

@@ -8,6 +8,7 @@ import { DashboardView } from '@/components/views/DashboardView';
 import { RepositoryView } from '@/components/views/RepositoryView';
 import { InvestigationView } from '@/components/views/InvestigationView';
 import { FixView } from '@/components/views/FixView';
+import { LiveBugFixPlayer } from '@/components/views/LiveBugFixPlayer';
 import { VerificationView } from '@/components/views/VerificationView';
 import { HistoryView } from '@/components/views/HistoryView';
 import { LoginLandingView } from '@/components/views/LoginLandingView';
@@ -111,6 +112,17 @@ export default function Home() {
                 if (isTouring) setCurrentTourStep(3);
               }}
               onNavigate={setActiveTab}
+            />
+          )}
+
+          {activeTab === 'live-fix' && (
+            <LiveBugFixPlayer
+              onNavigate={setActiveTab}
+              onVerifyFix={() => {
+                setActiveTab('verification');
+                setHasVerifiedFix(true);
+                if (isTouring) setCurrentTourStep(4);
+              }}
             />
           )}
 

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { encryptToken, decryptToken, generateSessionToken } from './crypto';
+import { RepairJob, RepairEvent } from '@/lib/types';
 
 export interface User {
   id: string;
@@ -47,6 +48,8 @@ interface DatabaseSchema {
   oauthAccounts: OAuthAccount[];
   sessions: Session[];
   connectedGitHubAccounts: ConnectedGitHubAccount[];
+  repairJobs: RepairJob[];
+  repairEvents: RepairEvent[];
 }
 
 const DATA_DIR = path.join(process.cwd(), '.data');
@@ -72,8 +75,16 @@ function ensureDbLoaded(): DatabaseSchema {
         oauthAccounts: [],
         sessions: [],
         connectedGitHubAccounts: [],
+        repairJobs: [],
+        repairEvents: [],
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(memoryDb, null, 2), 'utf-8');
+    }
+
+    // Migration safety for existing DB files
+    if (memoryDb) {
+      if (!memoryDb.repairJobs) memoryDb.repairJobs = [];
+      if (!memoryDb.repairEvents) memoryDb.repairEvents = [];
     }
   } catch (err) {
     console.error('Error loading database, using memory store:', err);
@@ -82,6 +93,8 @@ function ensureDbLoaded(): DatabaseSchema {
       oauthAccounts: [],
       sessions: [],
       connectedGitHubAccounts: [],
+      repairJobs: [],
+      repairEvents: [],
     };
   }
 
@@ -339,3 +352,137 @@ export function getGitHubAccessToken(userId: string): string | null {
   if (!account || !account.accessTokenEncrypted) return null;
   return decryptToken(account.accessTokenEncrypted);
 }
+
+// ==========================================
+// AUTONOMOUS REPAIR JOB & EVENT OPERATIONS
+// ==========================================
+
+export function createRepairJob(data: {
+  userId: string;
+  repository: RepairJob['repository'];
+  issueDescription: string;
+  issueCode?: string;
+  reproductionEvidence?: string;
+  maxRetries?: number;
+}): RepairJob {
+  const db = ensureDbLoaded();
+  const now = new Date().toISOString();
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+  const job: RepairJob = {
+    id: jobId,
+    userId: data.userId,
+    repository: data.repository,
+    issueDescription: data.issueDescription,
+    issueCode: data.issueCode,
+    reproductionEvidence: data.reproductionEvidence,
+    status: 'QUEUED',
+    currentStage: 'Queued for autonomous investigation',
+    testRuns: [],
+    retryCount: 0,
+    maxRetries: data.maxRetries ?? 3,
+    verificationOutcome: 'INCOMPLETE',
+    unresolvedRisks: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  db.repairJobs.unshift(job);
+  persistDb();
+
+  // Record initial event
+  appendRepairEvent(jobId, {
+    stage: 'QUEUED',
+    type: 'repair.started',
+    message: `Repair job initialized for ${data.repository.owner}/${data.repository.name}@${data.repository.pinnedCommitSha.substring(0, 7)}`,
+    payload: {
+      repository: `${data.repository.owner}/${data.repository.name}`,
+      branch: data.repository.branch,
+      commitSha: data.repository.pinnedCommitSha,
+      issueCode: data.issueCode,
+    },
+  });
+
+  return job;
+}
+
+export function getRepairJob(id: string): RepairJob | null {
+  const db = ensureDbLoaded();
+  return db.repairJobs.find((j) => j.id === id) || null;
+}
+
+export function getRepairJobsByUserId(userId: string): RepairJob[] {
+  const db = ensureDbLoaded();
+  return db.repairJobs.filter((j) => j.userId === userId);
+}
+
+export function updateRepairJob(
+  id: string,
+  updates: Partial<Omit<RepairJob, 'id' | 'userId' | 'createdAt'>>
+): RepairJob | null {
+  const db = ensureDbLoaded();
+  const index = db.repairJobs.findIndex((j) => j.id === id);
+  if (index === -1) return null;
+
+  db.repairJobs[index] = {
+    ...db.repairJobs[index],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  persistDb();
+  return db.repairJobs[index];
+}
+
+export function appendRepairEvent(
+  jobId: string,
+  eventData: {
+    type: string;
+    stage: string;
+    message: string;
+    payload?: Record<string, unknown>;
+  }
+): RepairEvent {
+  const db = ensureDbLoaded();
+  const now = new Date().toISOString();
+
+  // Determine next sequence for this job
+  const existingJobEvents = db.repairEvents.filter((e) => e.jobId === jobId);
+  const nextSequence = existingJobEvents.length + 1;
+  const eventId = `evt_${jobId}_${nextSequence}_${Math.random().toString(36).substring(2, 6)}`;
+
+  const event: RepairEvent = {
+    eventId,
+    jobId,
+    sequence: nextSequence,
+    type: eventData.type,
+    timestamp: now,
+    stage: eventData.stage,
+    message: eventData.message,
+    payload: eventData.payload,
+  };
+
+  db.repairEvents.push(event);
+  persistDb();
+  return event;
+}
+
+export function getRepairEvents(jobId: string, afterSequence: number = 0): RepairEvent[] {
+  const db = ensureDbLoaded();
+  return db.repairEvents
+    .filter((e) => e.jobId === jobId && e.sequence > afterSequence)
+    .sort((a, b) => a.sequence - b.sequence);
+}
+
+export function deleteRepairJob(id: string): boolean {
+  const db = ensureDbLoaded();
+  const initJobLen = db.repairJobs.length;
+  db.repairJobs = db.repairJobs.filter((j) => j.id !== id);
+  db.repairEvents = db.repairEvents.filter((e) => e.jobId !== id);
+  if (db.repairJobs.length !== initJobLen) {
+    persistDb();
+    return true;
+  }
+  return false;
+}
+

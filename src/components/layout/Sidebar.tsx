@@ -15,6 +15,7 @@ import {
   Lock,
   Smartphone,
   User,
+  Zap,
 } from 'lucide-react';
 import { NavTab } from '@/lib/types';
 import { aiEngine } from '@/lib/ai-engine';
@@ -55,6 +56,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: AlertTriangle,
       badge: '1 High',
       badgeColor: 'bg-rose-50 text-rose-700 border border-rose-200 font-semibold',
+    },
+    {
+      id: 'live-fix' as NavTab,
+      label: 'Live Fix & Learn',
+      icon: Zap,
+      badge: 'Interactive',
+      badgeColor: 'bg-indigo-600 text-white font-extrabold shadow-xs',
     },
     {
       id: 'fix' as NavTab,
