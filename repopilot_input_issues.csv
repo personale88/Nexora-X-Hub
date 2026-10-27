@@ -1,0 +1,11 @@
+Issue_ID,Language,Category,Error_Name_Target,Severity,Target_Source_File,Initial_Status
+ISS-01,TypeScript,Security,Expired JWT Bypass (AUTH-104),Critical,src/lib/server/auth-helpers.ts,Unresolved
+ISS-02,Java,Null Safety,NullPointerException in getEmail(),High,Main.java,Unresolved
+ISS-03,Python,Boundary Error,IndexError: list index out of range,Medium,sandbox.py,Unresolved
+ISS-04,C++,Memory Safety,std::out_of_range: vector subscript,High,main.cpp,Unresolved
+ISS-05,C,Security,Buffer Overflow: unsafe strcpy,Critical,main.c,Unresolved
+ISS-06,JavaScript,Runtime Bug,TypeError: Cannot read properties of undefined,High,sandbox.js,Unresolved
+ISS-07,JavaScript,Async Trap,UnhandledPromiseRejection: Network 504,Medium,sandbox.js,Unresolved
+ISS-08,Go,Concurrency,panic: runtime error: nil pointer dereference,High,main.go,Unresolved
+ISS-09,Rust,Ownership,error[E0382]: borrow of moved value,High,main.rs,Unresolved
+ISS-10,Python,Arithmetic,ZeroDivisionError: division by zero,Medium,sandbox.py,Unresolved

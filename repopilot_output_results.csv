@@ -1,0 +1,11 @@
+Job_ID,Issue_Ref,Language,Compiler_Runtime,AST_Diagnosis_Code,Execution_Time_ms,Test_Cases_Passed,Resolution_Status
+JOB-101,ISS-01,TypeScript,Node.js 20 (Strict TS),CWE-613: Expired Token Bypass,142,4/4,Fixed & PR #14 Merged
+JOB-102,ISS-02,Java,OpenJDK 21 (javac),JVM-NPE: Null Object Reference,210,2/2,Patched (Optional Guard)
+JOB-103,ISS-03,Python,CPython 3.12 (AST),PY-IDX: Boundary Overflow,198,3/3,Resolved (Enumerate Iteration)
+JOB-104,ISS-04,C++,GCC 13 (-std=c++20),STL-OOR: Vector Out of Range,175,2/2,Patched (readings.back)
+JOB-105,ISS-05,C,Clang 17 (gcc -std=c17),CWE-120: Stack Smashing,160,2/2,Fixed (snprintf Bounded)
+JOB-106,ISS-06,JavaScript,V8 Engine (ES2024),V8-TYP: Unhandled Undefined,115,3/3,Resolved (Optional Chaining)
+JOB-107,ISS-07,JavaScript,Node.js 20 (Microtask),ASYNC-REJ: Unhandled Rejection,180,2/2,Fixed (Graceful Recovery)
+JOB-108,ISS-08,Go,Go 1.22 (gc compiler),GO-PANIC: Nil Struct Dereference,135,2/2,Resolved (Defensive Guard)
+JOB-109,ISS-09,Rust,Rust 1.76 (rustc 2021),RUST-E0382: Move Ownership,225,2/2,Resolved (Borrow Reference)
+JOB-110,ISS-10,Python,CPython 3.12 (AST),PY-ZD: Division by Zero,105,2/2,Resolved (Empty List Check)
