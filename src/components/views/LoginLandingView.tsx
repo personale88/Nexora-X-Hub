@@ -168,6 +168,15 @@ export const LoginLandingView: React.FC = () => {
                 </>
               )}
             </button>
+
+            {/* Instant Demo Access (Explore Learning & Code Practice Space) */}
+            <a
+              href="/api/auth/dev-mock?provider=google&simulate=true"
+              className="w-full h-11 flex items-center justify-center gap-2 px-5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs transition-all cursor-pointer shadow-2xs"
+            >
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>⚡ One-Click Instant Access (Explore Learning & Code Lab)</span>
+            </a>
           </div>
 
           {/* Security & Least-Privilege Trust Badge */}

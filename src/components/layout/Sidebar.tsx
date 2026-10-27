@@ -16,6 +16,8 @@ import {
   Smartphone,
   User,
   Zap,
+  GraduationCap,
+  Code2,
 } from 'lucide-react';
 import { NavTab } from '@/lib/types';
 import { aiEngine } from '@/lib/ai-engine';
@@ -43,6 +45,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Dashboard',
       icon: LayoutDashboard,
       badge: null,
+    },
+    {
+      id: 'courses' as NavTab,
+      label: 'Learning Academy',
+      icon: GraduationCap,
+      badge: '5 Courses',
+      badgeColor: 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold',
+    },
+    {
+      id: 'practice' as NavTab,
+      label: 'Code Practice Lab',
+      icon: Code2,
+      badge: 'AI Tutor',
+      badgeColor: 'bg-emerald-600 text-white font-extrabold shadow-xs',
     },
     {
       id: 'repositories' as NavTab,

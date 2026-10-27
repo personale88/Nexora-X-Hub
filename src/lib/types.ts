@@ -1,4 +1,13 @@
-export type NavTab = 'dashboard' | 'repositories' | 'issues' | 'fix' | 'verification' | 'history' | 'live-fix';
+export type NavTab =
+  | 'dashboard'
+  | 'repositories'
+  | 'issues'
+  | 'fix'
+  | 'verification'
+  | 'history'
+  | 'live-fix'
+  | 'courses'
+  | 'practice';
 
 export interface FileNode {
   name: string;
@@ -226,4 +235,133 @@ export interface RepairJob {
   updatedAt: string;
   completedAt?: string;
   error?: string;
+}
+
+// ==========================================
+// Learning Platform & Academy Interfaces
+// ==========================================
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
+export interface Lesson {
+  id: string;
+  title: string;
+  durationMinutes: number;
+  type: 'concept' | 'interactive_lab' | 'quiz';
+  summary: string;
+  content: string[];
+  keyTakeaways?: string[];
+  codeExample?: {
+    language: string;
+    code: string;
+    description: string;
+  };
+  practiceChallengeId?: string;
+  quiz?: QuizQuestion[];
+}
+
+export interface CourseModule {
+  id: string;
+  title: string;
+  description: string;
+  lessons: Lesson[];
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  tagline: string;
+  description: string;
+  category:
+    | 'Debugging & Errors'
+    | 'JavaScript & TypeScript'
+    | 'Python & Algorithms'
+    | 'Security & Auth'
+    | 'React & Architecture'
+    | 'Java & Backend'
+    | 'C & Systems Programming';
+  level: 'Beginner' | 'Intermediate' | 'Advanced';
+  duration: string;
+  xp: number;
+  badge: string;
+  iconName: string;
+  color: string;
+  modules: CourseModule[];
+  skillsGained: string[];
+}
+
+// ==========================================
+// Code Practicing Space & Error Explainer
+// ==========================================
+
+export type SupportedLanguage =
+  | 'javascript'
+  | 'typescript'
+  | 'python'
+  | 'java'
+  | 'cpp'
+  | 'c'
+  | 'go'
+  | 'rust';
+
+export interface TestCase {
+  id: string;
+  name: string;
+  inputDescription: string;
+  expectedOutput: string;
+  codeSnippetToRun?: string;
+}
+
+export interface PracticeChallenge {
+  id: string;
+  title: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  language: SupportedLanguage;
+  category: 'Error Debugging' | 'Algorithms' | 'Async & Promises' | 'Security' | 'State & Closures';
+  description: string;
+  errorNameTarget: string;
+  initialCode: string;
+  solutionCode: string;
+  hints: string[];
+  testCases: TestCase[];
+  relatedCourseId?: string;
+  relatedLessonId?: string;
+}
+
+export interface ErrorExplanation {
+  errorName: string;
+  errorMessage: string;
+  failingLine?: number;
+  codeContext?: string;
+  whyThisHappened: string;
+  conceptTitle: string;
+  conceptDeepDive: string;
+  analogy: string;
+  mentalModelDiagram?: string;
+  suggestedFixBefore: string;
+  suggestedFixAfter: string;
+  fixExplanation: string;
+  bestPractices: string[];
+  relatedLesson?: {
+    courseId: string;
+    lessonId: string;
+    title: string;
+  };
+}
+
+export interface LiveDiagnostic {
+  hasError: boolean;
+  type: 'syntax' | 'runtime_warning' | 'security' | 'clean';
+  title: string;
+  line?: number;
+  codeSnippet?: string;
+  whereIsMistake: string;
+  whyIsError: string;
+  howToFix: string;
 }

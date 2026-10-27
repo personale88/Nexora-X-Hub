@@ -12,6 +12,8 @@ import { LiveBugFixPlayer } from '@/components/views/LiveBugFixPlayer';
 import { VerificationView } from '@/components/views/VerificationView';
 import { HistoryView } from '@/components/views/HistoryView';
 import { LoginLandingView } from '@/components/views/LoginLandingView';
+import { AcademyView } from '@/components/views/AcademyView';
+import { CodePracticeView } from '@/components/views/CodePracticeView';
 import { PullRequestModal } from '@/components/modals/PullRequestModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { YourRepositoriesModal } from '@/components/modals/YourRepositoriesModal';
@@ -37,6 +39,7 @@ export default function Home() {
   const [isPRModalOpen, setIsPRModalOpen] = useState<boolean>(false);
   const [isConnectRepoOpen, setIsConnectRepoOpen] = useState<boolean>(false);
   const [hasVerifiedFix, setHasVerifiedFix] = useState<boolean>(false);
+  const [practiceChallengeId, setPracticeChallengeId] = useState<string>('type-error-null');
   const [, setEngineRefresh] = useState(0);
 
   // 1. Loading State while session is verified
@@ -149,6 +152,26 @@ export default function Home() {
 
           {activeTab === 'history' && (
             <HistoryView onNavigate={setActiveTab} />
+          )}
+
+          {activeTab === 'courses' && (
+            <AcademyView
+              onNavigate={setActiveTab}
+              onOpenPracticeChallenge={(chId) => {
+                setPracticeChallengeId(chId);
+                setActiveTab('practice');
+              }}
+            />
+          )}
+
+          {activeTab === 'practice' && (
+            <CodePracticeView
+              onNavigate={setActiveTab}
+              initialChallengeId={practiceChallengeId}
+              onOpenLesson={(courseId, lessonId) => {
+                setActiveTab('courses');
+              }}
+            />
           )}
         </main>
       </div>

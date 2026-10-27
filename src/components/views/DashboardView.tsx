@@ -14,6 +14,10 @@ import {
   FolderGit2,
   RefreshCw,
   GitBranch,
+  GraduationCap,
+  Code2,
+  BookOpen,
+  Terminal,
 } from 'lucide-react';
 import { ACTIVE_REPO } from '@/lib/mock-data';
 import { NavTab, RepositoryData } from '@/lib/types';
@@ -217,23 +221,120 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs">
           <div className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">
-            Issues Resolved
+            Available Courses
           </div>
-          <div className="text-3xl font-extrabold text-emerald-600 tracking-tight">6</div>
+          <div className="text-3xl font-extrabold text-indigo-600 tracking-tight">5</div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium">
-            <Check className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Patches Auto-Generated</span>
+            <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Interactive Academy</span>
           </div>
         </div>
 
         <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs">
           <div className="text-slate-500 text-xs font-medium uppercase tracking-wider mb-1">
-            Verification Rate
+            Practice Challenges
           </div>
-          <div className="text-3xl font-extrabold text-indigo-600 tracking-tight">94%</div>
+          <div className="text-3xl font-extrabold text-emerald-600 tracking-tight">8+</div>
           <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Test Suite Pass Rate</span>
+            <Code2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>AI Error Tutor Enabled</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Learning Platform & Code Practice Space Showcase */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Card 1: Learning Academy */}
+        <div className="rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white p-6 md:p-7 shadow-md border border-indigo-800/50 flex flex-col justify-between relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none -mr-16 -mt-16" />
+          <div className="relative z-10 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-indigo-500/20 text-cyan-300 border border-indigo-400/30 flex items-center gap-1">
+                <GraduationCap className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Interactive Learning Platform</span>
+              </span>
+              <span className="text-xs font-bold text-amber-300">🔥 Earn XP & Badges</span>
+            </div>
+
+            <div>
+              <h3 className="text-xl font-extrabold text-white tracking-tight">
+                RepoPilot Academy & Courses
+              </h3>
+              <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                Take structured courses in JavaScript Execution, V8 Memory, Defensive Coding,
+                OWASP Security & Python. Complete lessons, test your knowledge with interactive
+                quizzes, and earn certificates of mastery!
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <span className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-slate-200">
+                JS/TS Debugging
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-slate-200">
+                OWASP Top 10
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-slate-200">
+                Defensive Architecture
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-slate-200">
+                React Render Traps
+              </span>
+            </div>
+          </div>
+
+          <div className="pt-6 relative z-10">
+            <button
+              onClick={() => onNavigate('courses')}
+              className="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Explore Course Platform</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: Code Practicing Space with AI Error Explainer */}
+        <div className="rounded-2xl bg-white border border-slate-200 p-6 md:p-7 shadow-xs hover:border-indigo-300 transition-all flex flex-col justify-between group">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                <Code2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Code Practice Ground</span>
+              </span>
+              <span className="text-xs font-bold text-indigo-600">⚡ AI Error Concept Explainer</span>
+            </div>
+
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                Code Practice & Error Lab
+              </h3>
+              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                Practice coding in JavaScript, TypeScript, or Python. When you encounter a runtime
+                error, our AI Tutor automatically steps in to explain <strong>why the error is coming</strong>,
+                breaks down the underlying language concept with mental model diagrams, and guides you to the fix!
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-700 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span className="text-rose-700 font-bold">TypeError / ReferenceError</span>
+              </div>
+              <span className="text-[11px] text-slate-500">Auto-Diagnosed & Explained</span>
+            </div>
+          </div>
+
+          <div className="pt-6">
+            <button
+              onClick={() => onNavigate('practice')}
+              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span>Launch Code Practice Lab</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
