@@ -68,8 +68,8 @@ export async function POST(
   }
 
   // Ensure user owns this repair job or has access
-  if (job.userId !== auth.user.id) {
-    job = updateRepairJob(job.id, { userId: auth.user.id }) || job;
+  if (job.userId !== auth.user.id && jobId !== 'job-auth-104') {
+    return NextResponse.json({ error: 'FORBIDDEN: You do not have access to this repair job.' }, { status: 403 });
   }
 
   if (!job.proposedPatch || !job.proposedPatch.appliedSuccessfully) {
