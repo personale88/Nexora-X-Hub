@@ -12,20 +12,57 @@ import {
   Check,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { NavTab } from '@/lib/types';
+import { NavTab, RepositoryData } from '@/lib/types';
 
 interface VerificationViewProps {
   onCreatePR: () => void;
   onNavigate: (tab: NavTab) => void;
   isAutoRunning?: boolean;
+  currentRepo?: RepositoryData;
+  activeJobId?: string | null;
 }
 
 export const VerificationView: React.FC<VerificationViewProps> = ({
   onCreatePR,
+  onNavigate,
+  currentRepo,
+  activeJobId,
 }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [visibleLogCount, setVisibleLogCount] = useState(0);
+
+  const isDemoRepo = currentRepo?.name === 'commerce-api' || currentRepo?.name === 'sample-vulnerable-repo';
+
+  if (!isDemoRepo && !activeJobId) {
+    return (
+      <div className="space-y-8 max-w-5xl mx-auto py-12">
+        <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-100">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900">No verification runs pending</h2>
+          <p className="text-slate-600 text-sm max-w-md mx-auto">
+            Repository <span className="font-semibold text-slate-800">{currentRepo?.name || 'Selected Repository'}</span> has no active patches undergoing sandbox testing or regression verification.
+          </p>
+          <div className="pt-4 flex items-center justify-center gap-3">
+            <button
+              onClick={() => onNavigate('repositories')}
+              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition-all"
+            >
+              Back to Repositories
+            </button>
+            <button
+              onClick={() => onNavigate('dashboard')}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md transition-all"
+            >
+              Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const verificationLogs = [
     '$ npm test -- --runInBand',

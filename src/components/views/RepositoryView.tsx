@@ -33,8 +33,10 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
   currentRepo = ACTIVE_REPO,
   onOpenRepoModal,
 }) => {
+  const isDemoRepo = currentRepo?.name === 'commerce-api' || currentRepo?.name === 'sample-vulnerable-repo';
+
   const [selectedFile, setSelectedFile] = useState<FileNode>(() => {
-    // Default select auth.ts
+    // Default select file
     const src = REPO_FILE_TREE.find((n) => n.name === 'src');
     const middleware = src?.children?.find((n) => n.name === 'middleware');
     const authFile = middleware?.children?.find((n) => n.name === 'auth.ts');
@@ -351,7 +353,7 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
               </span>
             </div>
 
-            {selectedFile?.hasIssue && (
+            {isDemoRepo && selectedFile?.hasIssue && (
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
                   AUTH-104 Vulnerability Detected Here

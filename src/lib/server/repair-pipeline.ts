@@ -21,12 +21,9 @@ import {
   cleanupWorkspace,
   searchCode,
 } from './sandbox';
-import {
-  diagnoseIssue,
-  generatePatch,
-  revisePatch,
-  getLLMConfig,
-} from './llm-provider';
+import { dockerSandboxWorker } from './docker-sandbox';
+import { buildRepositoryContext, scoreFileRelevance } from './repo-intelligence';
+import { diagnoseIssue, generatePatch, revisePatch, getLLMConfig } from './llm-provider';
 import {
   BugInvestigator,
   RootCauseAnalyzer,
@@ -169,16 +166,14 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
     // If local path is provided (sample repo or local clone), copy files
     if (job.repository.localPath && fs.existsSync(job.repository.localPath)) {
       await copyToWorkspace(job.repository.localPath, workspaceDir);
-    } else {
-      // Default to bundled sample vulnerable repository fixture if no external git clone is set
-      const defaultFixture = path.join(process.cwd(), 'fixtures', 'sample-vulnerable-repo');
-      if (fs.existsSync(defaultFixture)) {
-        await copyToWorkspace(defaultFixture, workspaceDir);
-      } else {
-        // Create baseline files directly in workspace if fixture directory not yet ready
-        fs.mkdirSync(path.join(workspaceDir, 'src'), { recursive: true });
-        fs.mkdirSync(path.join(workspaceDir, 'tests'), { recursive: true });
+    } else if (job.repository.name === 'sample-vulnerable-repo') {
+      const sampleFixture = path.join(process.cwd(), 'fixtures', 'sample-vulnerable-repo');
+      if (fs.existsSync(sampleFixture)) {
+        await copyToWorkspace(sampleFixture, workspaceDir);
       }
+    } else {
+      // For real GitHub repositories, initialize clean workspace
+      fs.mkdirSync(path.join(workspaceDir, 'src'), { recursive: true });
     }
 
     dispatchJobEvent(jobId, {
@@ -209,7 +204,7 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
       payload: { command: testCommand, stage: 'reproduction' },
     });
 
-    const baselineResult = await executeSandboxCommand(workspaceDir, testCommand, {
+    const baselineResult = await dockerSandboxWorker.execute(workspaceDir, testCommand, {
       onOutputChunk: (chunk) => {
         dispatchJobEvent(jobId, {
           stage: 'REPRODUCING',
@@ -310,8 +305,25 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
       if (validMatch) {
         affectedRelFile = validMatch;
       } else {
-        const searchHits = searchCode(workspaceDir, 'authenticateToken');
-        affectedRelFile = searchHits.length > 0 ? searchHits[0].file : (fileTree.find((f) => f.includes('src/') || f.includes('lib/')) || fileTree[0] || 'src/index.js');
+        // Use AST repository intelligence to score best matching source file
+        const repoContext = buildRepositoryContext(workspaceDir, {
+          owner: job.repository.owner,
+          name: job.repository.name,
+          branch: job.repository.branch,
+          commitSha: job.repository.pinnedCommitSha,
+        });
+
+        let highestScore = -1;
+        let bestFile = '';
+        for (const fileAnalysis of repoContext.analyzedFiles) {
+          const score = scoreFileRelevance(fileAnalysis.path, fileAnalysis, job.issueDescription);
+          if (score > highestScore) {
+            highestScore = score;
+            bestFile = fileAnalysis.path;
+          }
+        }
+
+        affectedRelFile = bestFile || fileTree.find((f) => f.includes('src/') || f.includes('lib/')) || fileTree[0] || '';
       }
     }
 
@@ -577,7 +589,7 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
       payload: { command: testCommand },
     });
 
-    let verificationResult = await executeSandboxCommand(workspaceDir, testCommand, {
+    let verificationResult = await dockerSandboxWorker.execute(workspaceDir, testCommand, {
       onOutputChunk: (chunk) => {
         dispatchJobEvent(jobId, {
           stage: 'TESTING',
@@ -647,7 +659,7 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
         });
 
         // Re-execute test runner
-        verificationResult = await executeSandboxCommand(workspaceDir, testCommand, {
+        verificationResult = await dockerSandboxWorker.execute(workspaceDir, testCommand, {
           onOutputChunk: (chunk) => {
             dispatchJobEvent(jobId, {
               stage: 'TESTING',

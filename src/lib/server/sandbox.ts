@@ -330,6 +330,15 @@ export function applyPatch(
   }
 }
 
+export interface SandboxExecutionResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  passed: boolean;
+  timedOut?: boolean;
+}
+
 /**
  * Execute an allowlisted test command inside the sandbox with strict bounds
  */
@@ -341,14 +350,7 @@ export async function executeSandboxCommand(
     maxBufferBytes?: number;
     onOutputChunk?: (chunk: string) => void;
   } = {}
-): Promise<{
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  durationMs: number;
-  passed: boolean;
-  timedOut?: boolean;
-}> {
+): Promise<SandboxExecutionResult> {
   const timeoutMs = options.timeoutMs ?? 35000;
   const maxBuffer = options.maxBufferBytes ?? 512 * 1024; // 512 KB
   const { executable, args } = validateCommand(command);

@@ -17,6 +17,7 @@ import { CodePracticeView } from '@/components/views/CodePracticeView';
 import { PullRequestModal } from '@/components/modals/PullRequestModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { YourRepositoriesModal } from '@/components/modals/YourRepositoriesModal';
+import { DiagnosticPanel } from '@/components/layout/DiagnosticPanel';
 import { ACTIVE_REPO } from '@/lib/mock-data';
 import { NavTab, RepositoryData } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
@@ -34,6 +35,7 @@ export default function Home() {
 
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [activeRepo, setActiveRepo] = useState<RepositoryData>(ACTIVE_REPO);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [isTouring, setIsTouring] = useState<boolean>(false);
   const [currentTourStep, setCurrentTourStep] = useState<number>(0);
   const [isPRModalOpen, setIsPRModalOpen] = useState<boolean>(false);
@@ -50,8 +52,10 @@ export default function Home() {
     setIsCreatingPR(true);
     setPrError(null);
 
+    const targetJobId = activeJobId || 'job-auth-104';
+
     try {
-      const res = await fetch('/api/repair-jobs/job-auth-104/create-pr', {
+      const res = await fetch(`/api/repair-jobs/${targetJobId}/create-pr`, {
         method: 'POST',
       });
       const data = await res.json();
@@ -141,6 +145,8 @@ export default function Home() {
                 if (isTouring) setCurrentTourStep(3);
               }}
               onNavigate={setActiveTab}
+              currentRepo={activeRepo}
+              activeJobId={activeJobId}
             />
           )}
 
@@ -163,6 +169,8 @@ export default function Home() {
                 if (isTouring) setCurrentTourStep(4);
               }}
               onNavigate={setActiveTab}
+              currentRepo={activeRepo}
+              activeJobId={activeJobId}
             />
           )}
 
@@ -170,6 +178,8 @@ export default function Home() {
             <VerificationView
               onCreatePR={handleCreatePR}
               onNavigate={setActiveTab}
+              currentRepo={activeRepo}
+              activeJobId={activeJobId}
             />
           )}
 
@@ -206,6 +216,8 @@ export default function Home() {
         currentRepoId={activeRepo.id}
         onSelectRepo={(newRepo) => {
           setActiveRepo(newRepo);
+          setActiveJobId(null);
+          setHasVerifiedFix(false);
           setActiveTab('repositories');
         }}
       />
@@ -230,6 +242,12 @@ export default function Home() {
         onClose={closeSettings}
         initialTab={settingsTab}
         onUpdated={() => setEngineRefresh((prev) => prev + 1)}
+      />
+
+      {/* Development Diagnostic Panel (Task 9) */}
+      <DiagnosticPanel
+        currentRepo={activeRepo}
+        currentJobId={activeJobId}
       />
     </div>
   );

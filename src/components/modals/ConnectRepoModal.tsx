@@ -97,11 +97,11 @@ export const ConnectRepoModal: React.FC<ConnectRepoModalProps> = ({
             health: {
               architecture: { status: 'Good', score: 95, label: 'Synced with Remote Head' },
               dependencies: { status: 'Good', count: 0, label: '0 High CVEs' },
-              security: { status: 'Warning', vulnerabilities: 1, label: '1 High Severity Auth Gap' },
-              testing: { status: 'Good', coverage: 92, label: '92% Test Suite Coverage' },
+              security: { status: 'Good', vulnerabilities: 0, label: 'Ready for AI investigation' },
+              testing: { status: 'Good', coverage: 92, label: 'Sandbox runner ready' },
             },
             status: 'Ready for autonomous verification',
-            activeIssueId: 'AUTH-104',
+            activeIssueId: undefined,
             stars: ghRepo.stargazers_count || 0,
           };
         });
@@ -226,11 +226,11 @@ export const ConnectRepoModal: React.FC<ConnectRepoModalProps> = ({
         health: {
           architecture: { status: 'Good', score: 94, label: 'Remote Git Head Verified' },
           dependencies: { status: 'Good', count: 0, label: 'Live Dependencies Scanned' },
-          security: { status: 'Warning', vulnerabilities: 1, label: '1 High Severity Auth Gap' },
+          security: { status: 'Good', vulnerabilities: 0, label: 'Ready for AI investigation' },
           testing: { status: 'Good', coverage: 89, label: '89% Automated Coverage' },
         },
-        status: '1 high-confidence issue detected',
-        activeIssueId: 'AUTH-104',
+        status: 'Repository connected',
+        activeIssueId: undefined,
         stars: data.repo?.stargazers_count || 0,
       };
 
@@ -247,16 +247,16 @@ export const ConnectRepoModal: React.FC<ConnectRepoModalProps> = ({
         description: `Cloned from ${customGitUrl}`,
         branch: customBranch || 'main',
         stack: ['TypeScript', 'Git'],
-        metrics: { files: 184, linesOfCode: '12.4k', testCoverage: '87%', dependencies: 23 },
+        metrics: { files: 10, linesOfCode: '1.2k', testCoverage: '87%', dependencies: 5 },
         languages: [{ name: 'TypeScript', percentage: 80, color: '#3178C6' }],
         health: {
           architecture: { status: 'Good', score: 90, label: 'Parsed' },
           dependencies: { status: 'Good', count: 0, label: '0' },
-          security: { status: 'Warning', vulnerabilities: 1, label: 'Auth Gap' },
+          security: { status: 'Good', vulnerabilities: 0, label: 'No confirmed issues found' },
           testing: { status: 'Good', coverage: 87, label: '87%' },
         },
-        status: '1 issue detected',
-        activeIssueId: 'AUTH-104',
+        status: 'Repository connected',
+        activeIssueId: undefined,
       });
     }
   };

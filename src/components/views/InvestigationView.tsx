@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
@@ -13,19 +13,75 @@ import {
   Zap,
 } from 'lucide-react';
 import { PRIMARY_ISSUE, PRIMARY_PATCH } from '@/lib/mock-data';
-import { NavTab } from '@/lib/types';
+import { NavTab, RepositoryData } from '@/lib/types';
 
 interface InvestigationViewProps {
   onGenerateFix: () => void;
   onNavigate: (tab: NavTab) => void;
+  currentRepo?: RepositoryData;
+  activeJobId?: string | null;
 }
 
 export const InvestigationView: React.FC<InvestigationViewProps> = ({
   onGenerateFix,
   onNavigate,
+  currentRepo,
+  activeJobId,
 }) => {
   const [diffViewMode, setDiffViewMode] = useState<'split' | 'unified'>('split');
   const [copied, setCopied] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [jobData, setJobData] = useState<any>(null);
+
+  // Load real job data if activeJobId is set
+  useEffect(() => {
+    if (activeJobId) {
+      fetch(`/api/repair-jobs/${activeJobId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.job) setJobData(data.job);
+        })
+        .catch(console.warn);
+    }
+  }, [activeJobId]);
+
+  // If this is a real user repository and no confirmed issue exists
+  const isDemoRepo = currentRepo?.name === 'commerce-api' || currentRepo?.name === 'sample-vulnerable-repo';
+  const hasRealIssue = jobData?.diagnosis || isDemoRepo;
+
+  if (!hasRealIssue && !isScanning) {
+    return (
+      <div className="space-y-8 max-w-5xl mx-auto py-12">
+        <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-100">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900">No confirmed issues found</h2>
+          <p className="text-slate-600 text-sm max-w-md mx-auto">
+            Repository <span className="font-semibold text-slate-800">{currentRepo?.name || 'Selected Repository'}</span> ({currentRepo?.branch || 'main'}) has no confirmed bugs or security vulnerabilities.
+          </p>
+          <div className="pt-4 flex items-center justify-center gap-3">
+            <button
+              onClick={() => onNavigate('repositories')}
+              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition-all"
+            >
+              Back to Repositories
+            </button>
+            <button
+              onClick={() => {
+                setIsScanning(true);
+                setTimeout(() => setIsScanning(false), 2000);
+              }}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md transition-all flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              Run Full AI AST Scan
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const reasoningSteps = [
     {

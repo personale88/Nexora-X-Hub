@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   ShieldCheck,
@@ -12,19 +12,68 @@ import {
   Zap,
 } from 'lucide-react';
 import { PRIMARY_PATCH, PRIMARY_REGRESSION_TEST } from '@/lib/mock-data';
-import { NavTab } from '@/lib/types';
+import { NavTab, RepositoryData } from '@/lib/types';
 
 interface FixViewProps {
   onVerifyFix: () => void;
   onNavigate: (tab: NavTab) => void;
+  currentRepo?: RepositoryData;
+  activeJobId?: string | null;
 }
 
 export const FixView: React.FC<FixViewProps> = ({
   onVerifyFix,
   onNavigate,
+  currentRepo,
+  activeJobId,
 }) => {
   const [copiedTest, setCopiedTest] = useState(false);
   const [copiedPatch, setCopiedPatch] = useState(false);
+  const [jobData, setJobData] = useState<any>(null);
+
+  useEffect(() => {
+    if (activeJobId) {
+      fetch(`/api/repair-jobs/${activeJobId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.job) setJobData(data.job);
+        })
+        .catch(console.warn);
+    }
+  }, [activeJobId]);
+
+  const isDemoRepo = currentRepo?.name === 'commerce-api' || currentRepo?.name === 'sample-vulnerable-repo';
+  const hasPatch = jobData?.proposedPatch || isDemoRepo;
+
+  if (!hasPatch) {
+    return (
+      <div className="space-y-8 max-w-5xl mx-auto py-12">
+        <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-100">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900">No pending fixes required</h2>
+          <p className="text-slate-600 text-sm max-w-md mx-auto">
+            Repository <span className="font-semibold text-slate-800">{currentRepo?.name || 'Selected Repository'}</span> has no verified patches awaiting review or deployment.
+          </p>
+          <div className="pt-4 flex items-center justify-center gap-3">
+            <button
+              onClick={() => onNavigate('repositories')}
+              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition-all"
+            >
+              Back to Repositories
+            </button>
+            <button
+              onClick={() => onNavigate('issues')}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md transition-all"
+            >
+              Inspect Issues
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const agentSteps = [
     'Loaded repository context',

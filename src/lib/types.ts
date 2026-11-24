@@ -48,7 +48,7 @@ export interface RepositoryData {
   languages: LanguageStat[];
   health: CodeHealth;
   status: string;
-  activeIssueId: string;
+  activeIssueId?: string;
   gitUrl?: string;
   stars?: number;
 }
