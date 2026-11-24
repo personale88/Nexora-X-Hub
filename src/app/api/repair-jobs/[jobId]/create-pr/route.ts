@@ -25,6 +25,7 @@ export async function POST(
     const diff = createUnifiedDiff('src/middleware/auth.js', beforeCode, afterCode);
 
     const seededJob = createRepairJob({
+      id: jobId,
       userId: auth.user.id,
       issueCode: 'AUTH-104',
       issueDescription: 'AUTH-104: Expired JWT tokens bypass authentication middleware without exp timestamp verification.',

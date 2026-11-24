@@ -52,8 +52,9 @@ interface DatabaseSchema {
   repairEvents: RepairEvent[];
 }
 
-const DATA_DIR = path.join(process.cwd(), '.data');
+const DATA_DIR = process.env.VERCEL ? path.join('/tmp', '.data') : path.join(process.cwd(), '.data');
 const DB_FILE = path.join(DATA_DIR, 'repopilot_db.json');
+const BUNDLED_DB_FILE = path.join(process.cwd(), '.data', 'repopilot_db.json');
 
 // Memory cache of DB for fast zero-latency access
 let memoryDb: DatabaseSchema | null = null;
@@ -69,6 +70,15 @@ function ensureDbLoaded(): DatabaseSchema {
     if (fs.existsSync(DB_FILE)) {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
       memoryDb = JSON.parse(content);
+    } else if (fs.existsSync(BUNDLED_DB_FILE)) {
+      const content = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8');
+      memoryDb = JSON.parse(content);
+      // Persist to writable directory
+      try {
+        fs.writeFileSync(DB_FILE, content, 'utf-8');
+      } catch (e) {
+        // Ignore write error if read-only
+      }
     } else {
       memoryDb = {
         users: [],
@@ -78,7 +88,11 @@ function ensureDbLoaded(): DatabaseSchema {
         repairJobs: [],
         repairEvents: [],
       };
-      fs.writeFileSync(DB_FILE, JSON.stringify(memoryDb, null, 2), 'utf-8');
+      try {
+        fs.writeFileSync(DB_FILE, JSON.stringify(memoryDb, null, 2), 'utf-8');
+      } catch (e) {
+        // In-memory fallback
+      }
     }
 
     // Migration safety for existing DB files
@@ -358,6 +372,7 @@ export function getGitHubAccessToken(userId: string): string | null {
 // ==========================================
 
 export function createRepairJob(data: {
+  id?: string;
   userId: string;
   repository: RepairJob['repository'];
   issueDescription: string;
@@ -367,7 +382,7 @@ export function createRepairJob(data: {
 }): RepairJob {
   const db = ensureDbLoaded();
   const now = new Date().toISOString();
-  const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const jobId = data.id || `job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
   const job: RepairJob = {
     id: jobId,
