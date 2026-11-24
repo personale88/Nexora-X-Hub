@@ -27,10 +27,37 @@ import {
   revisePatch,
   getLLMConfig,
 } from './llm-provider';
+import {
+  BugInvestigator,
+  RootCauseAnalyzer,
+  PatchGenerator,
+  RegressionTestGenerator,
+  CodeReviewAgent,
+  defaultGeminiProvider,
+} from './gemini';
 import { jobEventBus } from './event-bus';
 
 // Track active running jobs and their abort signals
 const activeJobAbortControllers = new Map<string, AbortController>();
+
+/**
+ * Recursively list source files in workspace
+ */
+function listWorkspaceFiles(dir: string, baseDir: string = dir): string[] {
+  const files: string[] = [];
+  if (!fs.existsSync(dir)) return files;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (['node_modules', '.git', '.next', 'dist', 'build', '.workspaces', '.data'].includes(entry.name)) continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listWorkspaceFiles(fullPath, baseDir));
+    } else if (entry.isFile()) {
+      files.push(path.relative(baseDir, fullPath).replace(/\\/g, '/'));
+    }
+  }
+  return files;
+}
 
 /**
  * Dispatch an event to both persistent database storage and in-memory SSE bus
@@ -237,9 +264,56 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
       message: 'Autonomous agent tracing symbol execution path and dependency graph...',
     });
 
-    // Code search for symbols
-    const searchHits = searchCode(workspaceDir, 'authenticateToken');
-    const affectedRelFile = searchHits.length > 0 ? searchHits[0].file : 'src/middleware/auth.ts';
+    const fileTree = listWorkspaceFiles(workspaceDir);
+    let affectedRelFile = '';
+
+    const bugInvestigator = new BugInvestigator();
+    const rootCauseAnalyzer = new RootCauseAnalyzer();
+    const patchGenerator = new PatchGenerator();
+    const regressionTestGenerator = new RegressionTestGenerator();
+    const codeReviewAgent = new CodeReviewAgent();
+
+    // Use Gemini to autonomously investigate the issue and localize the affected file
+    if (defaultGeminiProvider.isConfigured()) {
+      try {
+        const investigation = await bugInvestigator.investigateIssue({
+          issueTitle: job.issueCode || 'Reported Bug',
+          issueDescription: job.issueDescription,
+          stackTrace: baselineResult.stderr || baselineResult.stdout,
+          fileTree,
+        });
+
+        if (investigation.primarySuspectFile && fs.existsSync(path.join(workspaceDir, investigation.primarySuspectFile))) {
+          affectedRelFile = investigation.primarySuspectFile;
+        }
+
+        dispatchJobEvent(jobId, {
+          stage: 'INVESTIGATING',
+          type: 'analysis.hypothesis',
+          message: `Hypothesized execution path: ${investigation.hypothesizedPath}`,
+          payload: {
+            suspectFile: affectedRelFile,
+            bugType: investigation.bugType,
+            candidates: investigation.candidateFiles,
+            symbols: investigation.relevantSymbols,
+          },
+        });
+      } catch (invErr: any) {
+        console.warn('BugInvestigator AI localization warning:', invErr);
+      }
+    }
+
+    // Fallback localization if not resolved by Gemini
+    if (!affectedRelFile) {
+      const matches = (job.issueDescription + ' ' + baselineResult.stderr).match(/([a-zA-Z0-9_\-\.\/]+\.(?:js|ts|jsx|tsx|py|go))/g) || [];
+      const validMatch = matches.find((f) => fs.existsSync(path.join(workspaceDir, f)));
+      if (validMatch) {
+        affectedRelFile = validMatch;
+      } else {
+        const searchHits = searchCode(workspaceDir, 'authenticateToken');
+        affectedRelFile = searchHits.length > 0 ? searchHits[0].file : (fileTree.find((f) => f.includes('src/') || f.includes('lib/')) || fileTree[0] || 'src/index.js');
+      }
+    }
 
     dispatchJobEvent(jobId, {
       stage: 'INVESTIGATING',
@@ -258,30 +332,43 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
     // Call LLM for validated diagnosis
     updateRepairJob(jobId, {
       status: 'DIAGNOSING',
-      currentStage: 'Synthesizing formal root-cause hypothesis with LLM',
+      currentStage: 'Synthesizing formal root-cause hypothesis with Gemini',
     });
 
-    const llmConfig = getLLMConfig();
     let diagnosis: RepairJobDiagnosis;
 
-    if (llmConfig.provider !== 'none') {
+    if (defaultGeminiProvider.isConfigured()) {
       try {
-        diagnosis = await diagnoseIssue({
+        diagnosis = await rootCauseAnalyzer.analyzeRootCause({
+          issueTitle: job.issueCode || 'Defect Analysis',
           issueDescription: job.issueDescription,
           reproductionOutput: baselineResult.stderr || baselineResult.stdout,
           targetFile: affectedRelFile,
           fileContent: targetFileContent,
           candidateFiles: [affectedRelFile],
         });
-      } catch (err: any) {
-        // If LLM fails or is unavailable, report clear diagnostic error
-        throw new Error(`DIAGNOSIS_FAILED: ${err.message}`);
+      } catch (geminiErr: any) {
+        throw new Error(`DIAGNOSIS_FAILED: ${geminiErr.message}`);
       }
     } else {
-      // Strict rule: If no LLM provider is configured in environment, fail explicitly
-      throw new Error(
-        'NO_LLM_PROVIDER_CONFIGURED: Please configure OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in .env.local to run autonomous AI repair.'
-      );
+      const llmConfig = getLLMConfig();
+      if (llmConfig.provider !== 'none') {
+        try {
+          diagnosis = await diagnoseIssue({
+            issueDescription: job.issueDescription,
+            reproductionOutput: baselineResult.stderr || baselineResult.stdout,
+            targetFile: affectedRelFile,
+            fileContent: targetFileContent,
+            candidateFiles: [affectedRelFile],
+          });
+        } catch (err: any) {
+          throw new Error(`DIAGNOSIS_FAILED: ${err.message}`);
+        }
+      } else {
+        throw new Error(
+          'NO_LLM_PROVIDER_CONFIGURED: Please configure GEMINI_API_KEY in .env.local to run autonomous AI repair.'
+        );
+      }
     }
 
     updateRepairJob(jobId, {
@@ -322,13 +409,58 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
       message: 'Synthesizing non-breaking contextual patch...',
     });
 
-    const patch = await generatePatch({
-      affectedFile: diagnosis.affectedFile,
-      fileContent: targetFileContent,
-      rootCause: diagnosis.rootCause,
-      issueDescription: job.issueDescription,
-      testFailure: baselineResult.stderr || baselineResult.stdout,
-    });
+    let patch: RepairJobPatch;
+    if (defaultGeminiProvider.isConfigured()) {
+      try {
+        const genPatch = await patchGenerator.generatePatch({
+          targetFile: diagnosis.affectedFile,
+          originalContent: targetFileContent,
+          rootCause: diagnosis.rootCause,
+          explanation: diagnosis.explanation,
+          proposedSolution: (diagnosis as any).proposedSolution,
+          compilerOrTestFeedback: baselineResult.stderr,
+        });
+
+        // Review patch with CodeReviewAgent
+        try {
+          const review = await codeReviewAgent.reviewPatch({
+            targetFile: genPatch.file,
+            beforeCode: genPatch.beforeCode,
+            afterCode: genPatch.afterCode,
+            unifiedDiff: genPatch.unifiedDiff,
+            rootCause: diagnosis.rootCause,
+          });
+
+          dispatchJobEvent(jobId, {
+            stage: 'PATCHING',
+            type: 'patch.reviewed',
+            message: `Patch review score: ${review.score}/100 (${review.status}) - ${review.summary}`,
+            payload: review as unknown as Record<string, unknown>,
+          });
+        } catch (revErr) {
+          console.warn('CodeReviewAgent warning:', revErr);
+        }
+
+        patch = genPatch;
+      } catch {
+        // Fallback to legacy patch generator
+        patch = await generatePatch({
+          affectedFile: diagnosis.affectedFile,
+          fileContent: targetFileContent,
+          rootCause: diagnosis.rootCause,
+          issueDescription: job.issueDescription,
+          testFailure: baselineResult.stderr || baselineResult.stdout,
+        });
+      }
+    } else {
+      patch = await generatePatch({
+        affectedFile: diagnosis.affectedFile,
+        fileContent: targetFileContent,
+        rootCause: diagnosis.rootCause,
+        issueDescription: job.issueDescription,
+        testFailure: baselineResult.stderr || baselineResult.stdout,
+      });
+    }
 
     // Apply patch directly to workspace on disk
     const patchResult = applyPatch(workspaceDir, {
@@ -351,6 +483,64 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
     patch.unifiedDiff = patchResult.diff;
     patch.additions = patchResult.additions;
     patch.deletions = patchResult.deletions;
+
+    updateRepairJob(jobId, {
+      proposedPatch: patch,
+    });
+
+    dispatchJobEvent(jobId, {
+      stage: 'PATCHING',
+      type: 'patch.applied',
+      message: `Surgical patch applied cleanly to ${patch.file} (+${patch.additions} / -${patch.deletions} lines)`,
+      payload: {
+        file: patch.file,
+        diff: patch.unifiedDiff,
+        beforeCode: patch.beforeCode,
+        afterCode: patch.afterCode,
+        additions: patch.additions,
+        deletions: patch.deletions,
+      },
+    });
+
+    // Generate Regression Test
+    if (defaultGeminiProvider.isConfigured()) {
+      try {
+        const pkgContent = fs.existsSync(path.join(workspaceDir, 'package.json'))
+          ? readFile(workspaceDir, 'package.json')
+          : undefined;
+
+        const regTest = await regressionTestGenerator.generateTest({
+          targetFile: patch.file,
+          originalContent: patch.beforeCode,
+          patchedContent: patch.afterCode,
+          rootCause: diagnosis.rootCause,
+          packageJsonContent: pkgContent,
+        });
+
+        if (regTest && regTest.code && regTest.filename) {
+          try {
+            const targetTestPath = path.join(workspaceDir, regTest.filename);
+            fs.mkdirSync(path.dirname(targetTestPath), { recursive: true });
+            fs.writeFileSync(targetTestPath, regTest.code, 'utf-8');
+
+            dispatchJobEvent(jobId, {
+              stage: 'TESTING',
+              type: 'test.regression_created',
+              message: `Synthesized new regression test: ${regTest.filename}`,
+              payload: {
+                filename: regTest.filename,
+                framework: regTest.framework,
+                suiteName: regTest.suiteName,
+              },
+            });
+          } catch (writeErr) {
+            console.warn('Could not write regression test to workspace:', writeErr);
+          }
+        }
+      } catch (testGenErr) {
+        console.warn('RegressionTestGenerator warning:', testGenErr);
+      }
+    }
 
     updateRepairJob(jobId, {
       proposedPatch: patch,

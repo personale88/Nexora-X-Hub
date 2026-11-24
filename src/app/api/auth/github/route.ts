@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const state = generateOAuthState({ provider: 'github', action: 'login', origin });
 
   // If GitHub OAuth credentials are not yet configured, show dev setup option
-  if (!clientId || clientId === 'your-github-client-id') {
+  if (!clientId || clientId.includes('your-github-client-id')) {
     const devUrl = new URL('/api/auth/dev-mock', origin);
     devUrl.searchParams.set('provider', 'github');
     devUrl.searchParams.set('reason', 'GITHUB_CREDENTIALS_MISSING');

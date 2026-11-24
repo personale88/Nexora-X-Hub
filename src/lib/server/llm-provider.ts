@@ -1,8 +1,9 @@
 import { RepairJobDiagnosis, RepairJobPatch } from '@/lib/types';
 import { createUnifiedDiff } from './sandbox';
+import { defaultGeminiProvider } from './gemini';
 
 export interface LLMConfig {
-  provider: 'openai' | 'anthropic' | 'gemini' | 'custom' | 'none';
+  provider: 'gemini' | 'openai' | 'anthropic' | 'custom' | 'none';
   apiKey?: string;
   model: string;
   endpoint?: string;
@@ -10,9 +11,20 @@ export interface LLMConfig {
 }
 
 /**
- * Detect and resolve configured LLM provider from server environment
+ * Detect and resolve configured LLM provider from server environment.
+ * Prioritizes Gemini as the primary autonomous engineering intelligence.
  */
 export function getLLMConfig(): LLMConfig {
+  if (process.env.GEMINI_API_KEY) {
+    return {
+      provider: 'gemini',
+      apiKey: process.env.GEMINI_API_KEY,
+      model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || 'gemini-2.0-flash'}:generateContent`,
+      timeoutMs: 45000,
+    };
+  }
+
   if (process.env.OPENAI_API_KEY) {
     return {
       provider: 'openai',
@@ -29,16 +41,6 @@ export function getLLMConfig(): LLMConfig {
       apiKey: process.env.ANTHROPIC_API_KEY,
       model: process.env.ANTHROPIC_MODEL || 'claude-3-7-sonnet-20250219',
       endpoint: 'https://api.anthropic.com/v1/messages',
-      timeoutMs: 45000,
-    };
-  }
-
-  if (process.env.GEMINI_API_KEY) {
-    return {
-      provider: 'gemini',
-      apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
-      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || 'gemini-2.0-flash'}:generateContent`,
       timeoutMs: 45000,
     };
   }
@@ -141,27 +143,15 @@ async function callLLM(
     }
 
     if (config.provider === 'gemini') {
-      const url = `${config.endpoint}?key=${config.apiKey}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${systemInstruction}\n\nTask:\n${prompt}` }] }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json',
-          },
-        }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`LLM_PROVIDER_ERROR (gemini): ${res.status} ${res.statusText} - ${errText}`);
-      }
-
-      const data = await res.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      return await defaultGeminiProvider.generateContent(
+        `${systemInstruction}\n\nTask:\n${prompt}`,
+        {
+          model: config.model,
+          temperature: 0.1,
+          timeoutMs: config.timeoutMs,
+          systemInstruction,
+        }
+      );
     }
 
     throw new Error(`UNSUPPORTED_PROVIDER: ${config.provider}`);

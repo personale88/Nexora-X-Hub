@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const state = generateOAuthState({ provider: 'google', action: 'login', origin });
 
   // If Google OAuth credentials are not yet configured, show a helpful developer guide
-  if (!clientId || clientId === 'your-google-client-id') {
+  if (!clientId || clientId.includes('your-google-client-id')) {
     const devUrl = new URL('/api/auth/dev-mock', origin);
     devUrl.searchParams.set('provider', 'google');
     devUrl.searchParams.set('reason', 'GOOGLE_CREDENTIALS_MISSING');

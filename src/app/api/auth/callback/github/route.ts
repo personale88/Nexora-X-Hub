@@ -114,11 +114,19 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. Find or create User
-    let user = null;
-    const existingOAuth = getOAuthAccount('github', String(ghUser.id));
+    const isConnectAction = stateVerification.data?.action === 'connect';
+    const targetUserId = isConnectAction ? stateVerification.data?.userId : null;
 
-    if (existingOAuth) {
-      user = getUserById(existingOAuth.userId);
+    let user = null;
+    if (targetUserId) {
+      user = getUserById(targetUserId);
+    }
+
+    if (!user) {
+      const existingOAuth = getOAuthAccount('github', String(ghUser.id));
+      if (existingOAuth) {
+        user = getUserById(existingOAuth.userId);
+      }
     }
 
     if (!user && primaryEmail) {
@@ -156,10 +164,17 @@ export async function GET(req: NextRequest) {
       scope,
     });
 
-    // 7. Create Session
+    // 7. If this was a connect action, redirect back to dashboard with success query param
+    if (isConnectAction) {
+      const response = NextResponse.redirect(new URL('/?github_connected=true', origin));
+      clearOAuthStateCookie(response);
+      return response;
+    }
+
+    // 8. Create Session for login flow
     const session = createSession(user.id);
 
-    // 8. Set session cookie and redirect
+    // 9. Set session cookie and redirect
     const response = NextResponse.redirect(new URL('/', origin));
     setSessionCookie(response, session.id);
     clearOAuthStateCookie(response);

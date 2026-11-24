@@ -13,10 +13,10 @@ export async function GET(req: NextRequest) {
   }
 
   const clientId = process.env.GITHUB_CLIENT_ID;
-  const callbackUrl = `${origin}/api/github/callback`;
+  const callbackUrl = process.env.GITHUB_CALLBACK_URL || `${origin}/api/auth/callback/github`;
 
   // If credentials are not yet configured, provide mock dev connection
-  if (!clientId || clientId === 'your-github-client-id') {
+  if (!clientId || clientId.includes('your-github-client-id')) {
     const devUrl = new URL('/api/auth/dev-mock', origin);
     devUrl.searchParams.set('provider', 'github');
     devUrl.searchParams.set('action', 'connect');

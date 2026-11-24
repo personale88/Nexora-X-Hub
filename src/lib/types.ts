@@ -231,6 +231,13 @@ export interface RepairJob {
   maxRetries: number;
   verificationOutcome: 'VERIFIED' | 'FAILED' | 'INCOMPLETE' | 'NEEDS_REVIEW';
   unresolvedRisks: string[];
+  pullRequest?: {
+    id: number;
+    number: number;
+    htmlUrl: string;
+    branch: string;
+    createdAt: string;
+  };
   createdAt: string;
   updatedAt: string;
   completedAt?: string;

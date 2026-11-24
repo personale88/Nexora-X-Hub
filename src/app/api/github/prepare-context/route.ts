@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/server/auth-helpers';
 import { getGitHubAccessToken } from '@/lib/server/db';
-import { getRepository, getRepositoryTree } from '@/lib/server/github-service';
+import { getRepository, getRepositoryTree, isSensitiveFile } from '@/lib/server/github-service';
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -15,47 +15,62 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Owner and repository name are required.' }, { status: 400 });
   }
 
+  if (!accessToken) {
+    return NextResponse.json(
+      { error: 'GITHUB_NOT_CONNECTED: Connect your GitHub account to inspect repositories.' },
+      { status: 400 }
+    );
+  }
+
   try {
-    let repoMeta = null;
-    let fileCount = 48;
-    let loc = '14.8k';
-    let primaryLanguage = 'TypeScript';
+    // Stage 1: Authorization & Permission Validation
+    const repoMeta = await getRepository(accessToken, owner, repo);
+    const targetBranch = branch || repoMeta.defaultBranch || 'main';
 
-    if (accessToken) {
-      try {
-        repoMeta = await getRepository(accessToken, owner, repo);
-        primaryLanguage = repoMeta.primaryLanguage || 'TypeScript';
+    // Stage 2: Repository Metadata Extraction
+    const primaryLanguage = repoMeta.primaryLanguage || 'Unknown';
 
-        // Load tree
-        const targetBranch = branch || repoMeta.defaultBranch || 'main';
-        const treeData = await getRepositoryTree(accessToken, owner, repo, targetBranch);
-        if (treeData && Array.isArray(treeData.tree)) {
-          fileCount = treeData.tree.filter((node) => node.type === 'blob').length || fileCount;
-          loc = `${((fileCount * 120) / 1000).toFixed(1)}k`;
-        }
-      } catch (e) {
-        console.warn('Live GitHub inspection fallback:', e);
-      }
-    }
+    // Stage 3: File Tree & Source Indexing
+    const treeData = await getRepositoryTree(accessToken, owner, repo, targetBranch);
+    const allFiles = treeData.tree || [];
+
+    // Filter out sensitive files, credentials, and binary files
+    const safeSourceFiles = allFiles.filter(
+      (node) => node.type === 'blob' && !isSensitiveFile(node.path)
+    );
+
+    const totalFilesCount = safeSourceFiles.length;
+    const estimatedLoc = `${((totalFilesCount * 95) / 1000).toFixed(1)}k`;
+
+    // Stage 4 & 5: Relevant files localization index
+    const keyManifests = safeSourceFiles
+      .filter((node) =>
+        /^(package\.json|requirements\.txt|go\.mod|Cargo\.toml|pom\.xml|build\.gradle)$/i.test(
+          node.path.split('/').pop() || ''
+        )
+      )
+      .map((node) => node.path);
 
     return NextResponse.json({
       success: true,
       repository: {
-        id: repo,
-        name: repo,
-        owner,
-        branch: branch || repoMeta?.defaultBranch || 'main',
-        gitUrl: repoMeta?.gitUrl || `https://github.com/${owner}/${repo}.git`,
-        description: repoMeta?.description || `Repository from GitHub (@${owner})`,
+        id: repoMeta.id,
+        name: repoMeta.name,
+        fullName: repoMeta.fullName,
+        owner: repoMeta.owner,
+        branch: targetBranch,
+        gitUrl: repoMeta.gitUrl,
+        description: repoMeta.description,
         primaryLanguage,
-        fileCount,
-        loc,
+        fileCount: totalFilesCount,
+        loc: estimatedLoc,
+        keyManifests,
         stages: [
-          '✓ Repository authorized',
-          '✓ Repository metadata loaded',
-          '✓ File structure loaded',
-          '✓ Relevant files identified',
-          '✓ Context ready',
+          '✓ Repository authorized and permissions validated',
+          `✓ Repository metadata extracted (${repoMeta.visibility})`,
+          `✓ File tree indexed (${totalFilesCount} safe files)`,
+          `✓ Key manifests identified (${keyManifests.length} manifests)`,
+          '✓ Source context ready for autonomous investigation',
         ],
       },
     });

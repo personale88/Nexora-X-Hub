@@ -37,10 +37,36 @@ export default function Home() {
   const [isTouring, setIsTouring] = useState<boolean>(false);
   const [currentTourStep, setCurrentTourStep] = useState<number>(0);
   const [isPRModalOpen, setIsPRModalOpen] = useState<boolean>(false);
+  const [createdPR, setCreatedPR] = useState<{ number: number; htmlUrl: string; branch: string; title?: string } | null>(null);
+  const [isCreatingPR, setIsCreatingPR] = useState<boolean>(false);
+  const [prError, setPrError] = useState<string | null>(null);
   const [isConnectRepoOpen, setIsConnectRepoOpen] = useState<boolean>(false);
   const [hasVerifiedFix, setHasVerifiedFix] = useState<boolean>(false);
   const [practiceChallengeId, setPracticeChallengeId] = useState<string>('type-error-null');
   const [, setEngineRefresh] = useState(0);
+
+  const handleCreatePR = async () => {
+    setIsPRModalOpen(true);
+    setIsCreatingPR(true);
+    setPrError(null);
+
+    try {
+      const res = await fetch('/api/repair-jobs/job-auth-104/create-pr', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok && data.pullRequest) {
+        setCreatedPR(data.pullRequest);
+      } else {
+        setPrError(data.error || 'Failed to create pull request on GitHub.');
+      }
+    } catch (e: any) {
+      setPrError(e.message || 'Network error connecting to GitHub API.');
+    } finally {
+      setIsCreatingPR(false);
+      setHasVerifiedFix(true);
+    }
+  };
 
   // 1. Loading State while session is verified
   if (isLoading) {
@@ -142,10 +168,7 @@ export default function Home() {
 
           {activeTab === 'verification' && (
             <VerificationView
-              onCreatePR={() => {
-                setIsPRModalOpen(true);
-                setHasVerifiedFix(true);
-              }}
+              onCreatePR={handleCreatePR}
               onNavigate={setActiveTab}
             />
           )}
@@ -191,6 +214,9 @@ export default function Home() {
       <PullRequestModal
         isOpen={isPRModalOpen}
         onClose={() => setIsPRModalOpen(false)}
+        pullRequest={createdPR}
+        isCreating={isCreatingPR}
+        error={prError}
         onViewHistory={() => {
           setActiveTab('history');
           setIsPRModalOpen(false);

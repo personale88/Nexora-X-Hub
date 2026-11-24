@@ -5,18 +5,32 @@ import {
   X,
   GitPullRequest,
   ShieldCheck,
+  ExternalLink,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface PullRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
   onViewHistory: () => void;
+  pullRequest?: {
+    number: number;
+    htmlUrl: string;
+    branch: string;
+    title?: string;
+  } | null;
+  isCreating?: boolean;
+  error?: string | null;
 }
 
 export const PullRequestModal: React.FC<PullRequestModalProps> = ({
   isOpen,
   onClose,
   onViewHistory,
+  pullRequest,
+  isCreating = false,
+  error = null,
 }) => {
   if (!isOpen) return null;
 
@@ -30,8 +44,12 @@ export const PullRequestModal: React.FC<PullRequestModalProps> = ({
               <GitPullRequest className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Pull Request Created</h3>
-              <p className="text-[11px] text-slate-500">#412 opened 1 minute ago by RepoPilot AI</p>
+              <h3 className="text-base font-bold text-slate-900">
+                {isCreating ? 'Creating Pull Request...' : error ? 'Pull Request Failed' : 'Pull Request Created'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {pullRequest ? `#${pullRequest.number} opened just now by RepoPilot AI` : isCreating ? 'Pushing branch and opening PR on GitHub' : 'Automated GitHub pull request'}
+              </p>
             </div>
           </div>
 
@@ -45,52 +63,69 @@ export const PullRequestModal: React.FC<PullRequestModalProps> = ({
 
         {/* Modal Content */}
         <div className="p-6 space-y-5">
-          {/* PR Title & Status */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Ready for review
-              </span>
-              <span className="text-xs text-slate-500 font-mono">
-                repopilot/fix-auth-104 &rarr; main
-              </span>
+          {isCreating && (
+            <div className="flex flex-col items-center justify-center py-8 text-center space-y-3">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+              <p className="text-sm font-semibold text-slate-800">Publishing verified repair branch to GitHub...</p>
+              <p className="text-xs text-slate-500">Creating branch, committing verified patch, and opening PR</p>
             </div>
+          )}
 
-            <h4 className="text-lg font-bold text-slate-900 font-mono">
-              fix(auth): reject expired JWT tokens
-            </h4>
-          </div>
+          {error && !isCreating && (
+            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Failed to create GitHub Pull Request</p>
+                <p className="mt-1 text-rose-700">{error}</p>
+                <p className="mt-2 text-[11px] text-rose-600">Ensure your GitHub account has write permissions to this repository.</p>
+              </div>
+            </div>
+          )}
 
-          {/* Stats Bar */}
-          <div className="grid grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
-            <div>
-              <div className="text-[11px] text-slate-500 font-medium">Files changed</div>
-              <div className="text-base font-bold text-slate-900 font-mono">1</div>
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-500 font-medium">Tests</div>
-              <div className="text-base font-bold text-emerald-600 font-mono">24 passed</div>
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-500 font-medium">Verification</div>
-              <div className="text-base font-bold text-indigo-700 font-mono">Verified (97%)</div>
-            </div>
-          </div>
+          {pullRequest && !isCreating && (
+            <>
+              {/* PR Title & Status */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Open & Ready for review
+                  </span>
+                  <span className="text-xs text-slate-500 font-mono">
+                    {pullRequest.branch} &rarr; main
+                  </span>
+                </div>
 
-          {/* Description Snippet */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-            <div className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
-              AI Generated Summary
-            </div>
-            <p className="text-slate-700 leading-relaxed">
-              Patched <code className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded font-mono">src/middleware/auth.ts</code> to enforce token payload type checking and check <code className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded font-mono">decoded.exp</code> timestamp validity before invoking downstream middleware. Includes regression test in <code className="text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded font-mono">tests/auth.test.ts</code>.
-            </p>
-            <div className="flex items-center gap-1.5 text-emerald-700 font-medium text-[11px] pt-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>All automated CI checks passing. Zero breaking changes.</span>
-            </div>
-          </div>
+                <h4 className="text-lg font-bold text-slate-900 font-mono">
+                  {pullRequest.title || `Fix: Automated patch #${pullRequest.number}`}
+                </h4>
+              </div>
+
+              {/* View PR on GitHub Button */}
+              {pullRequest.htmlUrl && (
+                <a
+                  href={pullRequest.htmlUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all"
+                >
+                  <ExternalLink className="w-4 h-4 text-emerald-400" />
+                  <span>View Pull Request #{pullRequest.number} on GitHub</span>
+                </a>
+              )}
+
+              {/* Security & Verification confirmation */}
+              <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs space-y-1.5">
+                <div className="flex items-center gap-1.5 text-emerald-800 font-bold">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Verified with Zero Regressions</span>
+                </div>
+                <p className="text-emerald-700 leading-relaxed text-[11px]">
+                  All automated sandbox test suites passed before branch creation. Full root-cause analysis, reproduction traces, and test results have been documented in the PR body.
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Modal Footer */}

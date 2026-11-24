@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
   const clientId = process.env.GITHUB_CLIENT_ID;
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-  const callbackUrl = `${origin}/api/github/callback`;
+  const callbackUrl = process.env.GITHUB_CALLBACK_URL || `${origin}/api/github/callback`;
 
   try {
     // 3. Exchange code for access token

@@ -288,3 +288,161 @@ export async function getRepositoryFile(
     size: data.size,
   };
 }
+
+/**
+ * Filter out sensitive files, environment secrets, and binary blobs from AI context
+ */
+export function isSensitiveFile(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  const base = lower.split('/').pop() || lower;
+
+  if (
+    base.startsWith('.env') ||
+    base === 'credentials.json' ||
+    base === 'service-account.json' ||
+    base.endsWith('.pem') ||
+    base.endsWith('.key') ||
+    base.endsWith('.pfx') ||
+    base.endsWith('.p12') ||
+    base.endsWith('.keystore') ||
+    base.includes('id_rsa') ||
+    base.includes('id_ed25519') ||
+    base.endsWith('.secret') ||
+    base.endsWith('.lockb')
+  ) {
+    return true;
+  }
+
+  // Common binary extensions
+  const binaryExtensions = [
+    '.exe', '.bin', '.dll', '.so', '.dylib', '.png', '.jpg', '.jpeg',
+    '.gif', '.webp', '.svg', '.pdf', '.zip', '.tar', '.gz', '.mp4', '.woff', '.woff2'
+  ];
+  return binaryExtensions.some((ext) => lower.endsWith(ext));
+}
+
+/**
+ * Create a new Git branch on a GitHub repository
+ */
+export async function createBranch(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  newBranch: string,
+  baseBranch = 'main'
+): Promise<{ ref: string; sha: string }> {
+  // Get latest commit sha of base branch
+  const refData = await githubRequest<any>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${encodeURIComponent(baseBranch)}`,
+    accessToken
+  );
+  const sha = refData.object?.sha;
+
+  if (!sha) {
+    throw new Error(`Failed to retrieve commit SHA for base branch "${baseBranch}".`);
+  }
+
+  // Create new reference
+  const newRef = await githubRequest<any>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs`,
+    accessToken,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        ref: `refs/heads/${newBranch}`,
+        sha,
+      }),
+    }
+  );
+
+  return { ref: newRef.ref, sha };
+}
+
+/**
+ * Commit a file change to a specific branch on GitHub
+ */
+export async function commitFileChange(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  branch: string,
+  filePath: string,
+  newContent: string,
+  commitMessage: string
+): Promise<{ commitSha: string; htmlUrl: string }> {
+  // Retrieve existing file SHA if the file already exists on this branch
+  let fileSha: string | undefined;
+  try {
+    const existing = await githubRequest<any>(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(branch)}`,
+      accessToken
+    );
+    fileSha = existing.sha;
+  } catch {
+    // New file being created
+  }
+
+  const base64Content = Buffer.from(newContent, 'utf8').toString('base64');
+
+  const result = await githubRequest<any>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(filePath)}`,
+    accessToken,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: commitMessage,
+        content: base64Content,
+        branch,
+        ...(fileSha ? { sha: fileSha } : {}),
+      }),
+    }
+  );
+
+  return {
+    commitSha: result.commit?.sha,
+    htmlUrl: result.commit?.html_url || '',
+  };
+}
+
+/**
+ * Create an official GitHub Pull Request with diagnosis and verification details
+ */
+export async function createPullRequest(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  options: {
+    title: string;
+    head: string;
+    base: string;
+    body: string;
+  }
+): Promise<{
+  id: number;
+  number: number;
+  htmlUrl: string;
+  title: string;
+  state: string;
+}> {
+  const pr = await githubRequest<any>(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
+    accessToken,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        title: options.title,
+        head: options.head,
+        base: options.base,
+        body: options.body,
+      }),
+    }
+  );
+
+  return {
+    id: pr.id,
+    number: pr.number,
+    htmlUrl: pr.html_url,
+    title: pr.title,
+    state: pr.state,
+  };
+}

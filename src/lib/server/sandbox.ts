@@ -54,9 +54,18 @@ export function redactSecrets(text: string): string {
 
 /**
  * Command Allowlist Guard:
- * Only permits strictly vetted development and testing commands.
+ * Only permits strictly vetted development and testing commands across Node.js, Python, and Go stacks.
  */
-const ALLOWED_EXECUTABLES = new Set(['npm', 'npm.cmd', 'npx', 'npx.cmd', 'node', 'node.exe']);
+const ALLOWED_EXECUTABLES = new Set([
+  'npm', 'npm.cmd',
+  'npx', 'npx.cmd',
+  'node', 'node.exe',
+  'pnpm', 'pnpm.cmd',
+  'yarn', 'yarn.cmd',
+  'python', 'python.exe', 'python3', 'python3.exe',
+  'pytest', 'pytest.cmd', 'pytest.exe',
+  'go', 'go.exe'
+]);
 const FORBIDDEN_OPERATORS = [';', '&&', '||', '|', '`', '$(', '\n', '\r'];
 const FORBIDDEN_COMMANDS = [/\brm\b/i, /\brmdir\b/i, /\bdel\b/i, /\bcurl\b/i, /\bwget\b/i, /\bnc\b/i, /\bbash\b/i, /\bpowershell\b/i, /\bcmd(\.exe)?\b/i];
 
