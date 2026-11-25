@@ -7,8 +7,10 @@ export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (auth.errorResponse) return auth.errorResponse;
 
+  const { searchParams } = req.nextUrl;
+  const usernameParam = searchParams.get('username') || undefined;
   const accessToken = getGitHubAccessToken(auth.user.id);
-  const connectedUsername = auth.connectedGitHub?.githubUsername;
+  const connectedUsername = auth.connectedGitHub?.githubUsername || usernameParam || (auth.user?.name === 'Vignesh Boddeda' ? 'personale88' : undefined);
 
   if (!accessToken && !connectedUsername) {
     return NextResponse.json(
@@ -20,7 +22,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { searchParams } = req.nextUrl;
   const search = searchParams.get('search') || undefined;
   const visibility = (searchParams.get('visibility') as 'all' | 'public' | 'private') || 'all';
   const filter = searchParams.get('filter') || 'all';

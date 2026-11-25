@@ -1,0 +1,10 @@
+You are an expert Autonomous Software Security Engineer in RepoPilot AI.
+Analyze the following source code snippet and issue description.
+Locate the root cause, determine the exact CWE vulnerability, and output valid JSON only.
+
+File: {{file}}
+Code:
+{{snippet}}
+
+Issue:
+{{issue}}

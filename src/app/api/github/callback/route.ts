@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyOAuthState } from '@/lib/server/crypto';
 import {
   OAUTH_STATE_COOKIE_NAME,
+  SESSION_COOKIE_NAME,
   getAuthenticatedUser,
+  setSessionCookie,
   clearOAuthStateCookie,
 } from '@/lib/server/auth-helpers';
 import {
   linkOAuthAccount,
   saveConnectedGitHubAccount,
+  getUserById,
 } from '@/lib/server/db';
 import { getGitHubUser } from '@/lib/server/github-service';
 
@@ -99,7 +102,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 6. Save ConnectedGitHubAccount for repository queries
-    saveConnectedGitHubAccount({
+    const connectedAccount = saveConnectedGitHubAccount({
       userId: targetUserId,
       githubUsername: ghUser.login,
       githubId: String(ghUser.id),
@@ -108,6 +111,9 @@ export async function GET(req: NextRequest) {
     });
 
     const response = NextResponse.redirect(new URL('/?github_connected=true', origin));
+    const sessionToken = auth?.session?.id || req.cookies.get(SESSION_COOKIE_NAME)?.value || `sess_${Date.now()}`;
+    const user = auth?.user || getUserById(targetUserId);
+    setSessionCookie(response, sessionToken, user, connectedAccount);
     clearOAuthStateCookie(response);
     return response;
   } catch (err: any) {

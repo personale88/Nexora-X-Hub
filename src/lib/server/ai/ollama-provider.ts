@@ -29,11 +29,15 @@ export class OllamaProvider implements AIProviderInterface {
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      const timeout = setTimeout(() => controller.abort(), 10000);
 
       const res = await fetch(`${this.baseUrl}/api/tags`, {
         signal: controller.signal,
-        headers: { 'Bypass-Tunnel-Reminder': 'true' },
+        headers: {
+          'Bypass-Tunnel-Reminder': 'true',
+          'bypass-tunnel-reminder': '1',
+          'User-Agent': 'BSafe',
+        },
       }).finally(() => clearTimeout(timeout));
 
       if (!res.ok) {
@@ -105,6 +109,8 @@ export class OllamaProvider implements AIProviderInterface {
       headers: {
         'Content-Type': 'application/json',
         'Bypass-Tunnel-Reminder': 'true',
+        'bypass-tunnel-reminder': '1',
+        'User-Agent': 'BSafe',
       },
       body: JSON.stringify({
         model: this.model,
@@ -137,6 +143,8 @@ export class OllamaProvider implements AIProviderInterface {
       headers: {
         'Content-Type': 'application/json',
         'Bypass-Tunnel-Reminder': 'true',
+        'bypass-tunnel-reminder': '1',
+        'User-Agent': 'BSafe',
       },
       body: JSON.stringify({
         model: this.model,

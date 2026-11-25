@@ -163,6 +163,24 @@ export async function runAutonomousRepairPipeline(jobId: string): Promise<Repair
 
     workspaceDir = await initializeWorkspace(jobId);
 
+    // Initialize LangGraph stateful orchestration alongside pipeline
+    try {
+      const { executeLangGraphRepair } = await import('./orchestration/repair-graph');
+      executeLangGraphRepair({
+        jobId,
+        userId: job.userId,
+        repoOwner: job.repository.owner,
+        repoName: job.repository.name,
+        branch: job.repository.branch,
+        commitSha: job.repository.pinnedCommitSha || 'HEAD',
+        issueCode: job.issueCode || 'BUG-001',
+        issueDescription: job.issueDescription,
+        gitUrl: job.repository.gitUrl,
+      }).catch((graphErr) => console.warn(`LangGraph background execution (${jobId}):`, graphErr?.message));
+    } catch (e: any) {
+      console.warn('LangGraph initialization notice:', e?.message);
+    }
+
     // If local path is provided (sample repo or local clone), copy files
     if (job.repository.localPath && fs.existsSync(job.repository.localPath)) {
       await copyToWorkspace(job.repository.localPath, workspaceDir);

@@ -69,7 +69,9 @@ export const YourRepositoriesModal: React.FC<YourRepositoriesModalProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/github/repositories');
+      const ghUsername = user?.connectedAccounts?.github?.username || '';
+      const url = `/api/github/repositories${ghUsername ? `?username=${encodeURIComponent(ghUsername)}` : ''}`;
+      const res = await fetch(url);
       const data = await res.json();
 
       if (res.ok && data.repositories) {
@@ -78,6 +80,7 @@ export const YourRepositoriesModal: React.FC<YourRepositoriesModalProps> = ({
           setSelectedRepoId(data.repositories[0].id);
         }
       } else if (data.error === 'GITHUB_NOT_CONNECTED') {
+        setError('GitHub account not connected. Please reconnect GitHub.');
         setRepositories([]);
       } else {
         setError(data.message || 'Failed to fetch repositories.');

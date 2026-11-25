@@ -1,0 +1,90 @@
+services:
+  # ---------------------------------------------------------------------------
+  # Profile: sandbox — Isolated execution container for patch test validation
+  # ---------------------------------------------------------------------------
+  sandbox-runner:
+    image: node:20-alpine
+    container_name: repopilot-sandbox
+    profiles: ["sandbox"]
+    working_dir: /workspace
+    volumes:
+      - ./.workspaces:/workspace:rw
+    command: sh -c "echo 'RepoPilot Sandbox Service Ready' && tail -f /dev/null"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+
+  # ---------------------------------------------------------------------------
+  # Profile: semgrep — Static application security testing (SAST)
+  # ---------------------------------------------------------------------------
+  semgrep-scanner:
+    image: semgrep/semgrep:1.92.0
+    container_name: repopilot-semgrep
+    profiles: ["semgrep"]
+    volumes:
+      - .:/src:ro
+    command: semgrep scan --config auto --json /src
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Profile: chromadb — Vector retrieval database for semantic code indexing
+  # ---------------------------------------------------------------------------
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: repopilot-chromadb
+    profiles: ["chromadb"]
+    ports:
+      - "8000:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - ./data/chroma:/chroma/chroma:rw
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ---------------------------------------------------------------------------
+  # Profile: langfuse — Open-source LLM observability & telemetry dashboard
+  # ---------------------------------------------------------------------------
+  langfuse-server:
+    image: langfuse/langfuse:2
+    container_name: repopilot-langfuse
+    profiles: ["langfuse"]
+    ports:
+      - "3001:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/langfuse
+      - NEXTAUTH_SECRET=repopilot-langfuse-dev-secret-key-32chars
+      - SALT=repopilot-langfuse-salt-16chars
+      - NEXTAUTH_URL=http://localhost:3001
+      - TELEMETRY_ENABLED=false
+    depends_on:
+      - langfuse-db
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  langfuse-db:
+    image: postgres:16-alpine
+    container_name: repopilot-langfuse-db
+    profiles: ["langfuse"]
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=langfuse
+    volumes:
+      - ./data/langfuse-postgres:/var/lib/postgresql/data:rw
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
