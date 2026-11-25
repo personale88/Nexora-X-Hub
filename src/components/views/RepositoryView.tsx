@@ -7,6 +7,7 @@ import {
   FileCode,
   FileText,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   ChevronRight,
   ChevronDown,
@@ -16,6 +17,9 @@ import {
   FileJson,
   FolderGit2,
   Zap,
+  Loader2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { ACTIVE_REPO, REPO_FILE_TREE, PRIMARY_ISSUE } from '@/lib/mock-data';
 import { FileNode, NavTab, RepositoryData } from '@/lib/types';
@@ -48,9 +52,7 @@ function pathsToFileNodes(paths: string[]): FileNode[] {
           path: parts.slice(0, i + 1).join('/'),
           type: isFile ? 'file' : 'folder',
           language: isFile ? ext : undefined,
-          content: isFile
-            ? `// Source File: ${parts.slice(0, i + 1).join('/')}\n// Synchronized from GitHub repository branch.\n\n// Ready for real-time AI security & defect inspection.`
-            : undefined,
+          content: undefined,
           children: isFile ? undefined : [],
         };
         currentLevel.push(newNode);
@@ -90,9 +92,132 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
       name: 'README.md',
       path: 'README.md',
       type: 'file',
-      content: '// Select a file from the repository structure to inspect code.',
+      content: undefined,
     };
   });
+
+  const [fileDetails, setFileDetails] = useState<{
+    filePath: string;
+    content: string;
+    blobSha?: string;
+    fileSize?: number;
+    lines?: number;
+    language?: string;
+    isBinary?: boolean;
+    isEmpty?: boolean;
+    isTruncated?: boolean;
+    retrievalStatus?: string;
+  } | null>(null);
+  const [isFileLoading, setIsFileLoading] = useState<boolean>(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<boolean>(false);
+
+  const fileCacheRef = React.useRef<Map<string, any>>(new Map());
+  const abortCtrlRef = React.useRef<AbortController | null>(null);
+  const activeReqRef = React.useRef<string | null>(null);
+
+  const fetchSourceFile = React.useCallback(async (filePath: string) => {
+    if (!filePath) return;
+
+    // For demo repo commerce-api / sample-vulnerable-repo, use predefined source if present
+    if (isDemoRepo && selectedFile?.content) {
+      setFileDetails({
+        filePath,
+        content: selectedFile.content,
+        lines: selectedFile.content.split('\n').length,
+        fileSize: selectedFile.content.length,
+        language: selectedFile.language || 'typescript',
+        retrievalStatus: 'VERIFIED',
+      });
+      setFileError(null);
+      setIsFileLoading(false);
+      return;
+    }
+
+    const repoOwner = currentRepo?.owner;
+    const repoName = currentRepo?.name;
+    const branch = currentRepo?.branch || 'main';
+
+    if (!repoOwner || !repoName) {
+      setFileError('Repository owner and name are required.');
+      return;
+    }
+
+    const requestKey = `${repoOwner}/${repoName}:${branch}:${filePath}`;
+    activeReqRef.current = requestKey;
+
+    if (fileCacheRef.current.has(requestKey)) {
+      setFileDetails(fileCacheRef.current.get(requestKey));
+      setFileError(null);
+      setIsFileLoading(false);
+      return;
+    }
+
+    if (abortCtrlRef.current) {
+      abortCtrlRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortCtrlRef.current = controller;
+
+    setIsFileLoading(true);
+    setFileError(null);
+
+    try {
+      const url = `/api/github/file?owner=${encodeURIComponent(repoOwner)}&repo=${encodeURIComponent(repoName)}&path=${encodeURIComponent(filePath)}&branch=${encodeURIComponent(branch)}`;
+      const res = await fetch(url, { signal: controller.signal });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || `HTTP ${res.status} error fetching source code.`);
+      }
+
+      // Check that response matches the active requested file to prevent race conditions
+      if (activeReqRef.current !== requestKey) {
+        return;
+      }
+
+      if (data.success && data.file) {
+        fileCacheRef.current.set(requestKey, data.file);
+        setFileDetails(data.file);
+        setFileError(null);
+      } else {
+        throw new Error('Invalid file response from server.');
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      if (activeReqRef.current !== requestKey) return;
+      setFileError(err.message || 'Failed to retrieve file from GitHub.');
+      setFileDetails(null);
+    } finally {
+      if (activeReqRef.current === requestKey) {
+        setIsFileLoading(false);
+      }
+    }
+  }, [currentRepo?.owner, currentRepo?.name, currentRepo?.branch, isDemoRepo, selectedFile?.content, selectedFile?.language]);
+
+  React.useEffect(() => {
+    if (selectedFile?.path && selectedFile.type === 'file') {
+      fetchSourceFile(selectedFile.path);
+    }
+  }, [selectedFile?.path, fetchSourceFile]);
+
+  // When repository changes, clear cache and reset
+  React.useEffect(() => {
+    fileCacheRef.current.clear();
+    setFileDetails(null);
+    setFileError(null);
+    if (abortCtrlRef.current) {
+      abortCtrlRef.current.abort();
+    }
+  }, [currentRepo?.id, currentRepo?.name, currentRepo?.owner]);
+
+  const handleCopy = () => {
+    if (fileDetails?.content) {
+      navigator.clipboard.writeText(fileDetails.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   React.useEffect(() => {
     if (activeTree.length > 0) {
@@ -447,55 +572,140 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
         {/* Code Preview Column */}
         <div className="lg:col-span-8 rounded-xl bg-white border border-slate-200 shadow-xs overflow-hidden flex flex-col">
           <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <span className="w-3 h-3 rounded-full bg-rose-400" />
               <span className="w-3 h-3 rounded-full bg-amber-400" />
               <span className="w-3 h-3 rounded-full bg-emerald-400" />
-              <span className="text-xs font-mono text-slate-800 ml-2 font-semibold">
-                {selectedFile?.path || 'src/middleware/auth.ts'}
+              <span className="text-xs font-mono text-slate-800 ml-1 font-semibold truncate max-w-[280px]" title={selectedFile?.path}>
+                {selectedFile?.path || 'No file selected'}
               </span>
+
+              {fileDetails?.blobSha && (
+                <span className="text-[10px] font-mono text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded" title={`Git Blob SHA: ${fileDetails.blobSha}`}>
+                  SHA: {fileDetails.blobSha.slice(0, 7)}
+                </span>
+              )}
+
+              {fileDetails && !fileDetails.isBinary && (
+                <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  {fileDetails.lines} lines · {fileDetails.fileSize && fileDetails.fileSize >= 1024 ? `${(fileDetails.fileSize / 1024).toFixed(1)} KB` : `${fileDetails.fileSize || 0} B`}
+                </span>
+              )}
+
+              {fileDetails?.language && (
+                <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {fileDetails.language}
+                </span>
+              )}
             </div>
 
-            {isDemoRepo && selectedFile?.hasIssue && (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
-                  AUTH-104 Vulnerability Detected Here
-                </span>
+            <div className="flex items-center gap-2">
+              {fileDetails?.content && (
                 <button
-                  onClick={() => onNavigate('live-fix')}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-xs transition-colors"
+                  onClick={handleCopy}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium transition-colors shadow-2xs cursor-pointer"
+                  title="Copy full file source code"
                 >
-                  <Zap className="w-3 h-3 text-cyan-300" />
-                  <span>Fix Live</span>
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-semibold text-[11px]">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span className="text-[11px]">Copy Source</span>
+                    </>
+                  )}
                 </button>
-              </div>
-            )}
+              )}
+
+              {isDemoRepo && selectedFile?.hasIssue && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                    AUTH-104 Vulnerability Detected Here
+                  </span>
+                  <button
+                    onClick={() => onNavigate('live-fix')}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shadow-xs transition-colors"
+                  >
+                    <Zap className="w-3 h-3 text-cyan-300" />
+                    <span>Fix Live</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="p-4 font-mono text-xs overflow-x-auto text-slate-800 bg-[#fafafa] leading-relaxed max-h-[420px]">
-            {selectedFile?.content ? (
-              <pre className="space-y-0.5">
-                {selectedFile.content.split('\n').map((line, idx) => {
-                  const lineNum = idx + 1;
-                  const isBugLine = isDemoRepo && selectedFile.hasIssue && lineNum >= 18 && lineNum <= 24;
-                  return (
-                    <div
-                      key={idx}
-                      className={`flex items-start gap-4 px-2 py-0.5 rounded ${isBugLine
-                          ? 'bg-rose-100/80 text-rose-950 border-l-4 border-rose-500 font-medium'
-                          : 'hover:bg-slate-200/50'
-                        }`}
-                    >
-                      <span className="text-slate-400 select-none w-6 text-right shrink-0">
-                        {lineNum}
-                      </span>
-                      <span className="whitespace-pre">{line}</span>
-                    </div>
-                  );
-                })}
-              </pre>
+          <div className="p-4 font-mono text-xs overflow-x-auto text-slate-800 bg-[#fafafa] leading-relaxed max-h-[520px] overflow-y-auto min-h-[320px]">
+            {isFileLoading ? (
+              <div className="py-28 text-center space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-600 mx-auto" />
+                <p className="text-xs font-semibold text-slate-700">
+                  Retrieving source code from GitHub...
+                </p>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {currentRepo.owner}/{currentRepo.name}@{currentRepo.branch || 'main'} • {selectedFile?.path}
+                </p>
+              </div>
+            ) : fileError ? (
+              <div className="py-20 px-4 text-center space-y-3 bg-rose-50/50 rounded-xl border border-rose-100">
+                <AlertCircle className="w-7 h-7 text-rose-500 mx-auto" />
+                <h4 className="text-xs font-bold text-rose-900">Failed to Retrieve Source Code</h4>
+                <p className="text-xs text-rose-700 max-w-md mx-auto font-mono">
+                  {fileError}
+                </p>
+                <button
+                  onClick={() => selectedFile?.path && fetchSourceFile(selectedFile.path)}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-rose-200 text-rose-700 text-xs font-semibold hover:bg-rose-50 transition-colors shadow-xs cursor-pointer"
+                >
+                  Retry Retrieval
+                </button>
+              </div>
+            ) : fileDetails?.isBinary ? (
+              <div className="py-24 text-center space-y-2 text-slate-500">
+                <FileCode className="w-8 h-8 text-slate-400 mx-auto" />
+                <p className="text-xs font-bold text-slate-700">Binary Asset Detected</p>
+                <p className="text-[11px] text-slate-500 font-mono">
+                  {selectedFile?.path} cannot be displayed in text editor ({fileDetails.fileSize} bytes).
+                </p>
+              </div>
+            ) : fileDetails?.isEmpty ? (
+              <div className="py-24 text-center space-y-2 text-slate-400">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs font-medium">This file is empty (0 lines, 0 bytes).</p>
+              </div>
+            ) : fileDetails?.content !== undefined && fileDetails?.content !== null ? (
+              <div>
+                {fileDetails.isTruncated && (
+                  <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Large file notice: Truncated for editor performance (showing first 20,000 lines).</span>
+                  </div>
+                )}
+                <pre className="space-y-0.5">
+                  {fileDetails.content.split('\n').map((line, idx) => {
+                    const lineNum = idx + 1;
+                    const isBugLine = isDemoRepo && selectedFile?.hasIssue && lineNum >= 18 && lineNum <= 24;
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-start gap-4 px-2 py-0.5 rounded ${isBugLine
+                            ? 'bg-rose-100/80 text-rose-950 border-l-4 border-rose-500 font-medium'
+                            : 'hover:bg-slate-200/50'
+                          }`}
+                      >
+                        <span className="text-slate-400 select-none w-8 text-right shrink-0 font-mono text-[11px]">
+                          {lineNum}
+                        </span>
+                        <span className="whitespace-pre font-mono text-[12px]">{line}</span>
+                      </div>
+                    );
+                  })}
+                </pre>
+              </div>
             ) : (
-              <div className="text-slate-400 italic py-8 text-center">
+              <div className="text-slate-400 italic py-20 text-center">
                 Select a file from the repository tree to preview contents.
               </div>
             )}

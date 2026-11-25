@@ -312,30 +312,226 @@ export async function getBranches(
   return branches.map((b) => ({ name: b.name, protected: Boolean(b.protected) }));
 }
 
+export interface SanitizedGitHubFile {
+  repositoryId?: string;
+  repositoryOwner: string;
+  repositoryName: string;
+  branch: string;
+  commitSha?: string;
+  filePath: string;
+  blobSha: string;
+  fileSize: number;
+  lines: number;
+  content: string;
+  language: string;
+  isBinary: boolean;
+  isEmpty: boolean;
+  isTruncated?: boolean;
+  retrievalStatus: 'VERIFIED' | 'EMPTY' | 'BINARY' | 'TRUNCATED';
+}
+
+export function detectLanguageFromPath(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    mjs: 'javascript',
+    cjs: 'javascript',
+    py: 'python',
+    pyw: 'python',
+    html: 'html',
+    htm: 'html',
+    css: 'css',
+    scss: 'scss',
+    json: 'json',
+    md: 'markdown',
+    markdown: 'markdown',
+    java: 'java',
+    go: 'go',
+    rs: 'rust',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c',
+    hpp: 'cpp',
+    php: 'php',
+    rb: 'ruby',
+    sh: 'bash',
+    bash: 'bash',
+    yml: 'yaml',
+    yaml: 'yaml',
+    xml: 'xml',
+    sql: 'sql',
+    dockerfile: 'dockerfile',
+  };
+  const base = filePath.split('/').pop()?.toLowerCase() || '';
+  if (base === 'dockerfile') return 'dockerfile';
+  if (base === 'makefile') return 'makefile';
+  return map[ext] || 'plaintext';
+}
+
+export function isBinaryBuffer(buf: Buffer): boolean {
+  const checkLen = Math.min(buf.length, 8000);
+  for (let i = 0; i < checkLen; i++) {
+    if (buf[i] === 0) return true;
+  }
+  return false;
+}
+
 /**
- * Get specific file content from a repository.
+ * Get specific file content from a repository with genuine decoding,
+ * binary protection, empty file detection, and raw/blob fallbacks.
  */
 export async function getRepositoryFile(
   accessToken: string | undefined | null,
   owner: string,
   repo: string,
-  path: string,
+  filePath: string,
   branch = 'main'
-): Promise<{ content: string; encoding: string; size: number }> {
-  const data = await githubRequest<any>(
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`,
-    accessToken || undefined
-  );
+): Promise<SanitizedGitHubFile> {
+  const cleanPath = filePath.replace(/^\/+/, '');
+  const encodedPath = cleanPath.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  const language = detectLanguageFromPath(cleanPath);
 
-  let content = data.content;
-  if (data.encoding === 'base64') {
-    content = Buffer.from(data.content, 'base64').toString('utf8');
+  // Fast check: Known binary extensions
+  const binaryExtensions = [
+    '.exe', '.bin', '.dll', '.so', '.dylib', '.png', '.jpg', '.jpeg',
+    '.gif', '.webp', '.pdf', '.zip', '.tar', '.gz', '.woff', '.woff2', '.ttf', '.mp4', '.mp3'
+  ];
+  if (binaryExtensions.some(ext => cleanPath.toLowerCase().endsWith(ext))) {
+    return {
+      repositoryId: `${owner}/${repo}`,
+      repositoryOwner: owner,
+      repositoryName: repo,
+      branch,
+      filePath: cleanPath,
+      blobSha: '',
+      fileSize: 0,
+      lines: 0,
+      content: '',
+      language,
+      isBinary: true,
+      isEmpty: false,
+      retrievalStatus: 'BINARY',
+    };
+  }
+
+  let rawData: any = null;
+
+  // 1. Try GitHub Contents API with ref
+  try {
+    const url = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`;
+    rawData = await githubRequest<any>(url, accessToken || undefined);
+  } catch (contentsErr: any) {
+    if (contentsErr.message?.includes('GITHUB_NOT_FOUND')) {
+      throw new Error(`FILE_NOT_FOUND: File "${cleanPath}" was not found in ${owner}/${repo}@${branch}.`);
+    }
+    console.warn(`Contents API failed for ${cleanPath}, attempting raw fallback:`, contentsErr.message);
+  }
+
+  // 2. If Contents API returned a directory instead of a file
+  if (Array.isArray(rawData)) {
+    throw new Error(`INVALID_PATH: "${cleanPath}" is a directory, not a file.`);
+  }
+
+  // 3. If file has a blob SHA and is larger than 1MB (or content missing)
+  if (rawData && !rawData.content && rawData.sha) {
+    try {
+      const blobData = await githubRequest<any>(
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${rawData.sha}`,
+        accessToken || undefined
+      );
+      if (blobData && blobData.content) {
+        rawData.content = blobData.content;
+        rawData.encoding = blobData.encoding;
+      }
+    } catch (blobErr: any) {
+      console.warn(`Git Blobs API fallback failed for ${rawData.sha}:`, blobErr.message);
+    }
+  }
+
+  let content = '';
+  let blobSha = rawData?.sha || '';
+  let size = rawData?.size || 0;
+
+  if (rawData && rawData.content) {
+    if (rawData.encoding === 'base64') {
+      const cleanBase64 = rawData.content.replace(/\s/g, '');
+      const buf = Buffer.from(cleanBase64, 'base64');
+      if (isBinaryBuffer(buf)) {
+        return {
+          repositoryId: `${owner}/${repo}`,
+          repositoryOwner: owner,
+          repositoryName: repo,
+          branch,
+          filePath: cleanPath,
+          blobSha,
+          fileSize: size || buf.length,
+          lines: 0,
+          content: '',
+          language,
+          isBinary: true,
+          isEmpty: false,
+          retrievalStatus: 'BINARY',
+        };
+      }
+      content = buf.toString('utf8');
+      size = size || buf.length;
+    } else {
+      content = String(rawData.content);
+    }
+  } else {
+    // 4. Raw GitHub User Content fallback
+    try {
+      const rawUrl = `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(branch)}/${encodedPath}`;
+      const headers: Record<string, string> = {
+        'User-Agent': 'RepoPilot-Autonomous-Dev-Agent',
+      };
+      if (accessToken) {
+        headers['Authorization'] = `token ${accessToken}`;
+      }
+      const rawRes = await fetch(rawUrl, { headers });
+      if (rawRes.ok) {
+        content = await rawRes.text();
+        size = Buffer.byteLength(content, 'utf8');
+      } else if (rawRes.status === 404) {
+        throw new Error(`FILE_NOT_FOUND: File "${cleanPath}" does not exist in repository ${owner}/${repo} at branch ${branch}.`);
+      } else {
+        throw new Error(`GitHub raw fetch returned HTTP ${rawRes.status}`);
+      }
+    } catch (rawErr: any) {
+      if (rawErr.message?.startsWith('FILE_NOT_FOUND')) throw rawErr;
+      throw new Error(`FAILED_TO_RETRIEVE_SOURCE: Unable to fetch "${cleanPath}" from GitHub (${rawErr.message}).`);
+    }
+  }
+
+  const isEmpty = content.length === 0;
+  let lines = isEmpty ? 0 : content.split(/\r?\n/).length;
+  let isTruncated = false;
+
+  // Truncation check for extremely huge files (> 20,000 lines or > 2MB)
+  if (lines > 20000) {
+    const truncatedLines = content.split(/\r?\n/).slice(0, 20000);
+    content = truncatedLines.join('\n') + `\n\n// --- [TRUNCATED] Showing first 20,000 of ${lines} lines for performance ---`;
+    isTruncated = true;
   }
 
   return {
+    repositoryId: `${owner}/${repo}`,
+    repositoryOwner: owner,
+    repositoryName: repo,
+    branch,
+    filePath: cleanPath,
+    blobSha,
+    fileSize: size,
+    lines,
     content,
-    encoding: 'utf8',
-    size: data.size,
+    language,
+    isBinary: false,
+    isEmpty,
+    isTruncated,
+    retrievalStatus: isTruncated ? 'TRUNCATED' : isEmpty ? 'EMPTY' : 'VERIFIED',
   };
 }
 

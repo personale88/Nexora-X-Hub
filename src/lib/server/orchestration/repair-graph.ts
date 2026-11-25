@@ -108,18 +108,43 @@ async function retrieveSource(state: RepairGraphStateType): Promise<Partial<Repa
     message: 'Source retrieval complete. Localizing affected candidate file...',
   });
 
-  // Identify candidate file based on issue description
+  // Identify candidate file based on issue description & indexed files
   let targetFile = 'src/middleware/auth.ts';
-  let originalSource = '';
+  if (state.files && state.files.length > 0) {
+    const desc = `${state.issueCode} ${state.issueDescription}`.toLowerCase();
+    const matched = state.files.find(
+      (f) => desc.includes(f.toLowerCase()) || desc.includes(path.basename(f).toLowerCase())
+    );
+    if (matched) {
+      targetFile = matched;
+    } else {
+      const codeFile = state.files.find((f) => /\.(ts|js|py|go|rs|java|html)$/i.test(f));
+      if (codeFile) targetFile = codeFile;
+    }
+  }
 
+  let originalSource = '';
   const wsCandidate = path.join(state.workspacePath, targetFile);
   if (fs.existsSync(wsCandidate)) {
     originalSource = fs.readFileSync(wsCandidate, 'utf-8');
   } else {
-    // Check fixtures or default
-    const fixturePath = path.join(process.cwd(), 'fixtures', 'sample-vulnerable-repo', targetFile);
-    if (fs.existsSync(fixturePath)) {
-      originalSource = fs.readFileSync(fixturePath, 'utf-8');
+    try {
+      const { getRepositoryFile } = await import('../github-service');
+      const ghFile = await getRepositoryFile(
+        undefined,
+        state.repoOwner,
+        state.repoName,
+        targetFile,
+        state.branch
+      );
+      if (ghFile && ghFile.content) {
+        originalSource = ghFile.content;
+      }
+    } catch {
+      const fixturePath = path.join(process.cwd(), 'fixtures', 'sample-vulnerable-repo', targetFile);
+      if (fs.existsSync(fixturePath)) {
+        originalSource = fs.readFileSync(fixturePath, 'utf-8');
+      }
     }
   }
 
