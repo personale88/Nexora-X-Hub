@@ -23,6 +23,7 @@ export class OllamaProvider implements AIProviderInterface {
 
       const res = await fetch(`${this.baseUrl}/api/tags`, {
         signal: controller.signal,
+        headers: { 'Bypass-Tunnel-Reminder': 'true' },
       }).finally(() => clearTimeout(timeout));
 
       if (!res.ok) {
@@ -71,7 +72,9 @@ export class OllamaProvider implements AIProviderInterface {
 
   public async listModels(): Promise<string[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/tags`);
+      const res = await fetch(`${this.baseUrl}/api/tags`, {
+        headers: { 'Bypass-Tunnel-Reminder': 'true' },
+      });
       if (!res.ok) return ['qwen2.5-coder:7b', 'qwen2.5-coder:3b'];
       const data = await res.json();
       return (data.models || []).map((m: any) => m.name);
@@ -89,7 +92,10 @@ export class OllamaProvider implements AIProviderInterface {
 
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Bypass-Tunnel-Reminder': 'true',
+      },
       body: JSON.stringify({
         model: this.model,
         messages,
@@ -118,7 +124,10 @@ export class OllamaProvider implements AIProviderInterface {
 
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Bypass-Tunnel-Reminder': 'true',
+      },
       body: JSON.stringify({
         model: this.model,
         messages,
