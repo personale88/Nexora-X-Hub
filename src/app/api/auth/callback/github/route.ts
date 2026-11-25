@@ -164,9 +164,11 @@ export async function GET(req: NextRequest) {
       scope,
     });
 
-    // 7. If this was a connect action, redirect back to dashboard with success query param
+    // 7. If this was a connect action, persist connected GitHub account in session cookie and redirect
     if (isConnectAction) {
+      const existingSessionToken = req.cookies.get('repopilot_session')?.value || createSession(user.id).id;
       const response = NextResponse.redirect(new URL('/?github_connected=true', origin));
+      setSessionCookie(response, existingSessionToken, user, connectedAccount);
       clearOAuthStateCookie(response);
       return response;
     }

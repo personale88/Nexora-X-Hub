@@ -279,6 +279,7 @@ export function rehydrateSession(payload: {
     githubId: string;
     avatarUrl: string;
     scope: string;
+    accessTokenEncrypted?: string;
   };
 }): { user: User; session: Session; connectedGitHub: ConnectedGitHubAccount | null } {
   const db = ensureDbLoaded();
@@ -327,6 +328,25 @@ export function rehydrateSession(payload: {
         lastSyncAt: new Date().toISOString(),
       };
       db.connectedGitHubAccounts.push(connectedGitHub);
+    }
+
+    // Rehydrate OAuth account with encrypted access token
+    if (payload.githubAccount.accessTokenEncrypted) {
+      let oauthAcc = db.oauthAccounts.find((a) => a.userId === payload.userId && a.provider === 'github');
+      if (!oauthAcc) {
+        db.oauthAccounts.push({
+          id: `oa_gh_${payload.userId}`,
+          userId: payload.userId,
+          provider: 'github',
+          providerAccountId: payload.githubAccount.githubId,
+          accessTokenEncrypted: payload.githubAccount.accessTokenEncrypted,
+          scope: payload.githubAccount.scope,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        oauthAcc.accessTokenEncrypted = payload.githubAccount.accessTokenEncrypted;
+      }
     }
   } else {
     connectedGitHub = db.connectedGitHubAccounts.find((c) => c.userId === payload.userId) || null;

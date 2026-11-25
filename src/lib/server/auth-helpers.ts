@@ -8,6 +8,7 @@ import {
   getOAuthAccountsByUserId,
   rehydrateSession,
   getUserById,
+  getOAuthAccount,
 } from './db';
 import { encryptToken, decryptToken } from './crypto';
 
@@ -28,6 +29,7 @@ export interface EncryptedSessionPayload {
     githubId: string;
     avatarUrl: string;
     scope: string;
+    accessTokenEncrypted?: string;
   };
 }
 
@@ -107,6 +109,7 @@ export function setSessionCookie(
   const resolvedGh = connectedGitHub !== undefined ? connectedGitHub : (resolvedUser ? getConnectedGitHubAccount(resolvedUser.id) : null);
 
   if (resolvedUser) {
+    const oauthAccount = resolvedGh ? getOAuthAccount('github', resolvedGh.githubId) : null;
     const payload: EncryptedSessionPayload = {
       sessionToken,
       userId: resolvedUser.id,
@@ -120,6 +123,7 @@ export function setSessionCookie(
             githubId: resolvedGh.githubId,
             avatarUrl: resolvedGh.avatarUrl,
             scope: resolvedGh.scope,
+            accessTokenEncrypted: oauthAccount?.accessTokenEncrypted,
           }
         : undefined,
     };

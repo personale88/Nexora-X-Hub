@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/server/auth-helpers';
 import { getGitHubAccessToken } from '@/lib/server/db';
-import { getRepositories } from '@/lib/server/github-service';
+import { getRepositories, getPublicUserRepositories, SanitizedRepository } from '@/lib/server/github-service';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (auth.errorResponse) return auth.errorResponse;
 
   const accessToken = getGitHubAccessToken(auth.user.id);
+  const connectedUsername = auth.connectedGitHub?.githubUsername;
 
-  if (!accessToken || !auth.connectedGitHub) {
+  if (!accessToken && !connectedUsername) {
     return NextResponse.json(
       {
         error: 'GITHUB_NOT_CONNECTED',
@@ -32,18 +33,39 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const repositories = await getRepositories(accessToken, {
-      search,
-      visibility,
-      affiliation,
-      sort: 'updated',
-    });
+    let repositories: SanitizedRepository[] = [];
+
+    if (accessToken) {
+      try {
+        repositories = await getRepositories(accessToken, {
+          search,
+          visibility,
+          affiliation,
+          sort: 'updated',
+        });
+      } catch (tokenErr: any) {
+        console.warn('Authenticated /user/repos failed, attempting public fallback:', tokenErr.message);
+        if (connectedUsername) {
+          repositories = await getPublicUserRepositories(connectedUsername, {
+            search,
+            sort: 'updated',
+          });
+        } else {
+          throw tokenErr;
+        }
+      }
+    } else if (connectedUsername) {
+      repositories = await getPublicUserRepositories(connectedUsername, {
+        search,
+        sort: 'updated',
+      });
+    }
 
     return NextResponse.json({
       success: true,
       repositories,
       count: repositories.length,
-      connectedUser: auth.connectedGitHub.githubUsername,
+      connectedUser: connectedUsername || auth.user.name,
     });
   } catch (err: any) {
     console.error('Error fetching GitHub repositories:', err.message);

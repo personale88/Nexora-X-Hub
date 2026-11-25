@@ -70,7 +70,7 @@ function formatRelativeTime(dateString: string): string {
  */
 async function githubRequest<T>(
   endpoint: string,
-  accessToken: string,
+  accessToken?: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = endpoint.startsWith('http') ? endpoint : `${GITHUB_API_BASE}${endpoint}`;
@@ -78,7 +78,9 @@ async function githubRequest<T>(
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/vnd.github.v3+json');
   headers.set('User-Agent', 'RepoPilot-Autonomous-Dev-Agent');
-  headers.set('Authorization', `Bearer ${accessToken}`);
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
 
   const response = await fetch(url, {
     ...options,
@@ -195,14 +197,62 @@ export async function getRepositories(
 }
 
 /**
+ * Retrieve public repositories for a specific GitHub user.
+ * Operates without requiring an OAuth access token.
+ */
+export async function getPublicUserRepositories(
+  username: string,
+  options: {
+    sort?: 'updated' | 'created' | 'pushed' | 'full_name';
+    search?: string;
+  } = {}
+): Promise<SanitizedRepository[]> {
+  const url = `${GITHUB_API_BASE}/users/${encodeURIComponent(username)}/repos?per_page=100&sort=${options.sort || 'updated'}`;
+  const rawRepos = await githubRequest<any[]>(url);
+
+  let sanitized: SanitizedRepository[] = rawRepos.map((r: any) => ({
+    id: String(r.id),
+    name: r.name,
+    fullName: r.full_name,
+    owner: r.owner?.login || username,
+    ownerAvatar: r.owner?.avatar_url || '',
+    visibility: r.private ? 'Private' : 'Public',
+    primaryLanguage: r.language || 'TypeScript',
+    lastUpdated: r.updated_at,
+    lastUpdatedRelative: formatRelativeTime(r.updated_at),
+    accessLevel: 'Read / Write',
+    stars: r.stargazers_count || 0,
+    forks: r.forks_count || 0,
+    defaultBranch: r.default_branch || 'main',
+    gitUrl: r.clone_url || `https://github.com/${r.full_name}.git`,
+    description: r.description || `Repository from ${r.owner?.login || username}`,
+    isPrivate: Boolean(r.private),
+    permissions: r.permissions || { admin: true, push: true, pull: true },
+  }));
+
+  if (options.search) {
+    const q = options.search.toLowerCase();
+    sanitized = sanitized.filter(
+      (repo) =>
+        repo.name.toLowerCase().includes(q) ||
+        repo.owner.toLowerCase().includes(q) ||
+        repo.primaryLanguage.toLowerCase().includes(q) ||
+        repo.description.toLowerCase().includes(q)
+    );
+  }
+
+  return sanitized;
+}
+
+/**
  * Get detailed repository metadata.
  */
 export async function getRepository(
-  accessToken: string,
+  accessToken: string | undefined | null,
   owner: string,
   repo: string
 ): Promise<SanitizedRepository> {
-  const r = await githubRequest<any>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, accessToken);
+  const r = await githubRequest<any>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, accessToken || undefined);
 
   let accessLevel: 'Read / Write' | 'Read' | 'Admin' = 'Read';
   if (r.permissions?.admin) {
@@ -236,14 +286,14 @@ export async function getRepository(
  * Get repository tree (file structure).
  */
 export async function getRepositoryTree(
-  accessToken: string,
+  accessToken: string | undefined | null,
   owner: string,
   repo: string,
   branch = 'main'
 ): Promise<{ tree: Array<{ path: string; mode: string; type: 'blob' | 'tree'; size?: number; sha: string }> }> {
   return githubRequest<{ tree: Array<any> }>(
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
-    accessToken
+    accessToken || undefined
   );
 }
 
@@ -251,13 +301,13 @@ export async function getRepositoryTree(
  * Get branches for a repository.
  */
 export async function getBranches(
-  accessToken: string,
+  accessToken: string | undefined | null,
   owner: string,
   repo: string
 ): Promise<Array<{ name: string; protected: boolean }>> {
   const branches = await githubRequest<any[]>(
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=30`,
-    accessToken
+    accessToken || undefined
   );
   return branches.map((b) => ({ name: b.name, protected: Boolean(b.protected) }));
 }
@@ -266,7 +316,7 @@ export async function getBranches(
  * Get specific file content from a repository.
  */
 export async function getRepositoryFile(
-  accessToken: string,
+  accessToken: string | undefined | null,
   owner: string,
   repo: string,
   path: string,
@@ -274,7 +324,7 @@ export async function getRepositoryFile(
 ): Promise<{ content: string; encoding: string; size: number }> {
   const data = await githubRequest<any>(
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`,
-    accessToken
+    accessToken || undefined
   );
 
   let content = data.content;

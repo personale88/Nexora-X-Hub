@@ -15,16 +15,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Owner and repository name are required.' }, { status: 400 });
   }
 
-  if (!accessToken) {
-    return NextResponse.json(
-      { error: 'GITHUB_NOT_CONNECTED: Connect your GitHub account to inspect repositories.' },
-      { status: 400 }
-    );
-  }
-
   try {
     // Stage 1: Authorization & Permission Validation
-    const repoMeta = await getRepository(accessToken, owner, repo);
+    const repoMeta = await getRepository(accessToken || undefined, owner, repo);
     const targetBranch = branch || repoMeta.defaultBranch || 'main';
 
     // Stage 2: Repository Metadata Extraction
