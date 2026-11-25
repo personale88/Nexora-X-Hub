@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { encryptToken, decryptToken, generateSessionToken } from './crypto';
-import { RepairJob, RepairEvent } from '@/lib/types';
+import { RepairJob, RepairEvent } from '../types';
 
 export interface User {
   id: string;

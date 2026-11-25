@@ -3,16 +3,17 @@ import { GoogleGenAI } from '@google/genai';
 
 export class GeminiProvider implements AIProviderInterface {
   public readonly id = 'gemini';
-  public readonly name = 'Google Gemini 2.0 Flash Intelligence';
+  public readonly name = 'Google Gemini Cloud Intelligence';
   public readonly type = 'gemini' as const;
 
   private client: GoogleGenAI | null = null;
   private model: string;
   private apiKey: string;
+  private static readonly FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
 
   constructor(apiKey?: string, model?: string) {
     this.apiKey = apiKey || process.env.GEMINI_API_KEY || '';
-    this.model = model || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    this.model = model || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
     if (this.apiKey) {
       try {
@@ -36,43 +37,54 @@ export class GeminiProvider implements AIProviderInterface {
     }
 
     const start = Date.now();
-    try {
-      if (!this.client) {
-        this.client = new GoogleGenAI({ apiKey: this.apiKey });
+    const probeCandidates = [this.model, ...GeminiProvider.FALLBACK_MODELS.filter(m => m !== this.model)];
+    let lastError: any = null;
+
+    for (const candidate of probeCandidates) {
+      try {
+        if (!this.client) {
+          this.client = new GoogleGenAI({ apiKey: this.apiKey });
+        }
+
+        const res = await this.client.models.generateContent({
+          model: candidate,
+          contents: 'Ping: return {"status":"ok"} in JSON',
+        });
+
+        const latencyMs = Date.now() - start;
+        this.model = candidate;
+
+        return {
+          provider: 'gemini',
+          status: 'CONNECTED',
+          model: candidate,
+          latencyMs,
+          availableModels: ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'],
+          message: `Gemini Cloud API healthy and responsive (${candidate}).`,
+          lastChecked: now,
+        };
+      } catch (err: any) {
+        lastError = err;
+        // If model not found or temporarily unavailable, try next candidate
+        if (err.message && (err.message.includes('404') || err.message.includes('503') || err.message.includes('not found') || err.message.includes('no longer available'))) {
+          continue;
+        }
+        break;
       }
-
-      // Lightweight probe
-      const res = await this.client.models.generateContent({
-        model: this.model,
-        contents: 'Ping: return {"status":"ok"} in JSON',
-      });
-
-      const latencyMs = Date.now() - start;
-      const text = res.text?.trim() || '';
-
-      return {
-        provider: 'gemini',
-        status: 'CONNECTED',
-        model: this.model,
-        latencyMs,
-        availableModels: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
-        message: 'Gemini Cloud API healthy and responsive.',
-        lastChecked: now,
-      };
-    } catch (err: any) {
-      return {
-        provider: 'gemini',
-        status: 'ERROR',
-        model: this.model,
-        latencyMs: Date.now() - start,
-        message: err.message || 'Error connecting to Gemini API.',
-        lastChecked: now,
-      };
     }
+
+    return {
+      provider: 'gemini',
+      status: 'ERROR',
+      model: this.model,
+      latencyMs: Date.now() - start,
+      message: lastError?.message || 'Error connecting to Gemini API.',
+      lastChecked: now,
+    };
   }
 
   public async listModels(): Promise<string[]> {
-    return ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    return ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'];
   }
 
   public async generateText(prompt: string, systemInstruction?: string): Promise<string> {
@@ -81,13 +93,27 @@ export class GeminiProvider implements AIProviderInterface {
       this.client = new GoogleGenAI({ apiKey: this.apiKey });
     }
 
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      contents: prompt,
-      config: systemInstruction ? { systemInstruction } : undefined,
-    });
+    const candidates = [this.model, ...GeminiProvider.FALLBACK_MODELS.filter(m => m !== this.model)];
+    let lastErr: any;
 
-    return response.text || '';
+    for (const candidate of candidates) {
+      try {
+        const response = await this.client.models.generateContent({
+          model: candidate,
+          contents: prompt,
+          config: systemInstruction ? { systemInstruction } : undefined,
+        });
+        this.model = candidate;
+        return response.text || '';
+      } catch (err: any) {
+        lastErr = err;
+        if (err.message && (err.message.includes('404') || err.message.includes('503') || err.message.includes('no longer available'))) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastErr;
   }
 
   public async generateStructuredJSON<T>(
@@ -102,21 +128,35 @@ export class GeminiProvider implements AIProviderInterface {
 
     const enrichedPrompt = `${prompt}\n\nStrict Output Requirements:\n- Respond with ONLY valid JSON conforming to this schema:\n${schemaDescription}\n- Do not wrap in markdown or backticks. Return raw JSON.`;
 
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      contents: enrichedPrompt,
-      config: {
-        responseMimeType: 'application/json',
-        systemInstruction,
-      },
-    });
+    const candidates = [this.model, ...GeminiProvider.FALLBACK_MODELS.filter(m => m !== this.model)];
+    let lastErr: any;
 
-    const rawText = response.text || '{}';
-    try {
-      const sanitized = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-      return JSON.parse(sanitized) as T;
-    } catch (e: any) {
-      throw new Error(`FAILED_TO_PARSE_GEMINI_JSON: ${e.message}\nRaw response:\n${rawText}`);
+    for (const candidate of candidates) {
+      try {
+        const response = await this.client.models.generateContent({
+          model: candidate,
+          contents: enrichedPrompt,
+          config: {
+            responseMimeType: 'application/json',
+            systemInstruction,
+          },
+        });
+
+        this.model = candidate;
+        const rawText = response.text || '{}';
+        const sanitized = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        return JSON.parse(sanitized) as T;
+      } catch (err: any) {
+        lastErr = err;
+        if (err.message && (err.message.includes('404') || err.message.includes('503') || err.message.includes('no longer available'))) {
+          continue;
+        }
+        if (err.message && err.message.includes('FAILED_TO_PARSE_GEMINI_JSON')) {
+          throw err;
+        }
+        throw err;
+      }
     }
+    throw lastErr;
   }
 }

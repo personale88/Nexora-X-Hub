@@ -45,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       .then((d) => {
         if (d.activeMode) setAiMode(d.activeMode);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const navItems = [
@@ -149,17 +149,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
-                  isActive
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${isActive
                     ? 'bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200/80 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <Icon
-                    className={`w-4 h-4 transition-colors ${
-                      isActive ? 'text-indigo-600' : 'text-slate-500 group-hover:text-slate-700'
-                    }`}
+                    className={`w-4 h-4 transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-500 group-hover:text-slate-700'
+                      }`}
                   />
                   <span>{item.label}</span>
                 </div>
@@ -167,9 +165,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center gap-1.5">
                   {item.badge && (
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
-                        item.badgeColor || 'bg-slate-100 text-slate-600 border border-slate-200'
-                      }`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${item.badgeColor || 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}
                     >
                       {item.badge}
                     </span>

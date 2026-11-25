@@ -16,7 +16,7 @@ export class GeminiProvider {
 
   constructor() {
     this.apiKey = process.env.GEMINI_API_KEY || '';
-    this.defaultModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+    this.defaultModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
     if (this.apiKey) {
       this.client = new GoogleGenAI({ apiKey: this.apiKey });

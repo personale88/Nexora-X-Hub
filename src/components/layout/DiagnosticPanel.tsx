@@ -106,7 +106,7 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
                 <div className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/50">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-200">
-                      {aiHealth?.gemini?.model ? (aiHealth.gemini.model.includes('2.0') ? 'Gemini 2.0' : aiHealth.gemini.model) : 'Gemini 2.0'}
+                      {aiHealth?.gemini?.model || 'Gemini Cloud'}
                     </span>
                     <span
                       className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${

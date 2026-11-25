@@ -16,11 +16,12 @@ export interface LLMConfig {
  */
 export function getLLMConfig(): LLMConfig {
   if (process.env.GEMINI_API_KEY) {
+    const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
     return {
       provider: 'gemini',
       apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
-      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || 'gemini-2.0-flash'}:generateContent`,
+      model,
+      endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       timeoutMs: 45000,
     };
   }

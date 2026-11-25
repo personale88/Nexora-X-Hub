@@ -207,7 +207,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {healthData?.gemini?.status || 'Active'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500">Gemini 2.5 Flash / Pro cloud reasoning</p>
+                <p className="text-[11px] text-slate-500">Gemini 3.5 Flash cloud reasoning</p>
               </button>
 
               {/* Ollama Provider */}
