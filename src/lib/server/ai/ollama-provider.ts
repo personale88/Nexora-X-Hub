@@ -9,7 +9,7 @@ export class OllamaProvider implements AIProviderInterface {
   private model: string;
 
   constructor(baseUrl?: string, model?: string) {
-    this.baseUrl = (baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+    this.baseUrl = (baseUrl || process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
     this.model = model || process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b';
   }
 
