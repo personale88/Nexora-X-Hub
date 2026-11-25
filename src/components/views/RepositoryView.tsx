@@ -27,6 +27,41 @@ interface RepositoryViewProps {
   onOpenRepoModal?: () => void;
 }
 
+function pathsToFileNodes(paths: string[]): FileNode[] {
+  const root: FileNode[] = [];
+  for (const filePath of paths) {
+    const parts = filePath.split('/');
+    let currentLevel = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isFile = i === parts.length - 1;
+      const existing = currentLevel.find((n) => n.name === part);
+      if (existing) {
+        if (!isFile && existing.children) {
+          currentLevel = existing.children;
+        }
+      } else {
+        const ext = part.split('.').pop() || '';
+        const newNode: FileNode = {
+          name: part,
+          path: parts.slice(0, i + 1).join('/'),
+          type: isFile ? 'file' : 'folder',
+          language: isFile ? ext : undefined,
+          content: isFile
+            ? `// Source File: ${parts.slice(0, i + 1).join('/')}\n// Synchronized from GitHub repository branch.\n\n// Ready for real-time AI security & defect inspection.`
+            : undefined,
+          children: isFile ? undefined : [],
+        };
+        currentLevel.push(newNode);
+        if (!isFile && newNode.children) {
+          currentLevel = newNode.children;
+        }
+      }
+    }
+  }
+  return root;
+}
+
 export const RepositoryView: React.FC<RepositoryViewProps> = ({
   onNavigate,
   onInvestigateIssue,
@@ -35,13 +70,44 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
 }) => {
   const isDemoRepo = currentRepo?.name === 'commerce-api' || currentRepo?.name === 'sample-vulnerable-repo';
 
+  const activeTree = React.useMemo(() => {
+    if (currentRepo?.fileTree && currentRepo.fileTree.length > 0) {
+      return pathsToFileNodes(currentRepo.fileTree);
+    }
+    return isDemoRepo ? REPO_FILE_TREE : [];
+  }, [currentRepo?.name, currentRepo?.fileTree, isDemoRepo]);
+
   const [selectedFile, setSelectedFile] = useState<FileNode>(() => {
-    // Default select file
-    const src = REPO_FILE_TREE.find((n) => n.name === 'src');
-    const middleware = src?.children?.find((n) => n.name === 'middleware');
-    const authFile = middleware?.children?.find((n) => n.name === 'auth.ts');
-    return authFile || REPO_FILE_TREE[0];
+    if (isDemoRepo) {
+      const src = REPO_FILE_TREE.find((n) => n.name === 'src');
+      const middleware = src?.children?.find((n) => n.name === 'middleware');
+      const authFile = middleware?.children?.find((n) => n.name === 'auth.ts');
+      return authFile || REPO_FILE_TREE[0];
+    }
+    return {
+      name: 'README.md',
+      path: 'README.md',
+      type: 'file',
+      content: '// Select a file from the repository structure to inspect code.',
+    };
   });
+
+  React.useEffect(() => {
+    if (activeTree.length > 0) {
+      const findFirstFile = (nodes: FileNode[]): FileNode | null => {
+        for (const n of nodes) {
+          if (n.type === 'file') return n;
+          if (n.children) {
+            const f = findFirstFile(n.children);
+            if (f) return f;
+          }
+        }
+        return null;
+      };
+      const first = findFirstFile(activeTree);
+      if (first) setSelectedFile(first);
+    }
+  }, [activeTree]);
 
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
     src: true,
@@ -269,60 +335,90 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
       </div>
 
       {/* AI DETECTED ISSUE CALLOUT (Highlight Box) */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-indigo-50/60 border-2 border-rose-200 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase font-extrabold tracking-wider px-2.5 py-0.5 rounded bg-rose-600 text-white shadow-xs">
-                AI DETECTED ISSUE
-              </span>
-              <span className="text-xs font-mono font-bold bg-rose-100 border border-rose-300 px-2 py-0.5 rounded text-rose-800">
-                {PRIMARY_ISSUE.code}
-              </span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
-                Severity: {PRIMARY_ISSUE.severity}
-              </span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Confidence: {PRIMARY_ISSUE.confidence}%
-              </span>
+      {!isDemoRepo && !currentRepo?.activeIssueId ? (
+        <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-xs uppercase font-extrabold tracking-wider px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Repository Clean
+                </span>
+                <span className="text-xs text-slate-500 font-mono">No Confirmed Issues Found</span>
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">
+                {currentRepo.name} has no confirmed vulnerabilities
+              </h3>
+              <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
+                Source tree indexed ({currentRepo.metrics.files} files). No active JWT bugs or security flaws detected. Run an autonomous deep scan to inspect code and tests.
+              </p>
             </div>
-
-            <h3 className="text-xl font-bold text-slate-900">
-              {PRIMARY_ISSUE.title}
-            </h3>
-
-            <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">
-              {PRIMARY_ISSUE.description}
-            </p>
-
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-mono pt-1">
-              <span>Affected file:</span>
-              <span className="text-rose-700 font-semibold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                {PRIMARY_ISSUE.affectedFile} ({PRIMARY_ISSUE.lines})
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-2.5">
-            <button
-              onClick={() => onNavigate('live-fix')}
-              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
-            >
-              <Zap className="w-4 h-4 text-cyan-300" />
-              <span>Watch Live Fix &amp; Learn</span>
-            </button>
-
             <button
               onClick={onInvestigateIssue}
-              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-md shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-md transition-all whitespace-nowrap cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span>Investigate Issue</span>
+              <Sparkles className="w-4 h-4 text-emerald-300" />
+              <span>Run Autonomous Scan</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-rose-50/90 via-white to-indigo-50/60 border-2 border-rose-200 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase font-extrabold tracking-wider px-2.5 py-0.5 rounded bg-rose-600 text-white shadow-xs">
+                  AI DETECTED ISSUE
+                </span>
+                <span className="text-xs font-mono font-bold bg-rose-100 border border-rose-300 px-2 py-0.5 rounded text-rose-800">
+                  {PRIMARY_ISSUE.code}
+                </span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                  Severity: {PRIMARY_ISSUE.severity}
+                </span>
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Confidence: {PRIMARY_ISSUE.confidence}%
+                </span>
+              </div>
+
+              <h3 className="text-xl font-bold text-slate-900">
+                {PRIMARY_ISSUE.title}
+              </h3>
+
+              <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">
+                {PRIMARY_ISSUE.description}
+              </p>
+
+              <div className="flex items-center gap-2 text-xs text-slate-500 font-mono pt-1">
+                <span>Affected file:</span>
+                <span className="text-rose-700 font-semibold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                  {PRIMARY_ISSUE.affectedFile} ({PRIMARY_ISSUE.lines})
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5">
+              <button
+                onClick={() => onNavigate('live-fix')}
+                className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+              >
+                <Zap className="w-4 h-4 text-cyan-300" />
+                <span>Watch Live Fix &amp; Learn</span>
+              </button>
+
+              <button
+                onClick={onInvestigateIssue}
+                className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm shadow-md shadow-slate-900/10 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+              >
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <span>Investigate Issue</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* File Tree & Code Preview Split */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -337,7 +433,7 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
           </div>
 
           <div className="space-y-0.5 max-h-[420px] overflow-y-auto pr-1">
-            {renderTree(REPO_FILE_TREE)}
+            {renderTree(activeTree)}
           </div>
         </div>
 
@@ -374,7 +470,7 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
               <pre className="space-y-0.5">
                 {selectedFile.content.split('\n').map((line, idx) => {
                   const lineNum = idx + 1;
-                  const isBugLine = selectedFile.hasIssue && lineNum >= 18 && lineNum <= 24;
+                  const isBugLine = isDemoRepo && selectedFile.hasIssue && lineNum >= 18 && lineNum <= 24;
                   return (
                     <div
                       key={idx}

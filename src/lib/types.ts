@@ -51,6 +51,8 @@ export interface RepositoryData {
   activeIssueId?: string;
   gitUrl?: string;
   stars?: number;
+  owner?: string;
+  fileTree?: string[];
 }
 
 export interface DetectedIssue {

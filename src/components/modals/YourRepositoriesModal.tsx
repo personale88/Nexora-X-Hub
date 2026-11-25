@@ -147,9 +147,11 @@ export const YourRepositoriesModal: React.FC<YourRepositoriesModalProps> = ({
       const adaptedRepo: RepositoryData = {
         id: repo.name,
         name: repo.name,
+        owner: repo.owner,
         gitUrl: repo.gitUrl,
         description: repo.description || prep.description || 'GitHub Repository',
         branch: prep.branch || repo.defaultBranch,
+        fileTree: prep.fileTree || [],
         stack: [prep.primaryLanguage || repo.primaryLanguage, 'Git', repo.accessLevel],
         metrics: {
           files: prep.fileCount || Math.max(1, repo.stars * 2 + 10),

@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
         fileCount: totalFilesCount,
         loc: estimatedLoc,
         keyManifests,
+        fileTree: safeSourceFiles.map((n) => n.path),
         stages: [
           '✓ Repository authorized and permissions validated',
           `✓ Repository metadata extracted (${repoMeta.visibility})`,
