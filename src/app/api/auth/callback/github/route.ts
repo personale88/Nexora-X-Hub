@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 6. Connect GitHub Account for repository access
-    saveConnectedGitHubAccount({
+    const connectedAccount = saveConnectedGitHubAccount({
       userId: user.id,
       githubUsername: ghUser.login,
       githubId: String(ghUser.id),
@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
 
     // 9. Set session cookie and redirect
     const response = NextResponse.redirect(new URL('/', origin));
-    setSessionCookie(response, session.id);
+    setSessionCookie(response, session.id, user, connectedAccount);
     clearOAuthStateCookie(response);
     return response;
   } catch (err: any) {

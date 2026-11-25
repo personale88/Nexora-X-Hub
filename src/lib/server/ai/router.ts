@@ -40,6 +40,10 @@ export class AIProviderManager {
     this.activeMode = mode;
   }
 
+  public setOllamaBaseUrl(url: string) {
+    this.ollama.setBaseUrl(url);
+  }
+
   public async getOverallHealth(): Promise<{
     activeMode: AIProviderType;
     gemini: ProviderHealth;
@@ -98,7 +102,7 @@ export class AIProviderManager {
     return {
       provider: this.gemini,
       fallbackProvider: this.ollama,
-      routedReason: 'Hybrid Router: Complex reasoning assigned to Cloud Gemini 2.5',
+      routedReason: 'Hybrid Router: Complex reasoning assigned to Cloud Gemini 2.0',
     };
   }
 }

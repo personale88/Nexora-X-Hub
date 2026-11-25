@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
 
     // 7. Set secure session cookie and redirect to dashboard
     const response = NextResponse.redirect(new URL('/', origin));
-    setSessionCookie(response, session.id);
+    setSessionCookie(response, session.id, user, null);
     clearOAuthStateCookie(response);
     return response;
   } catch (err: any) {

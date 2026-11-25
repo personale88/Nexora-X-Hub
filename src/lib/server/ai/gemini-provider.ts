@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 
 export class GeminiProvider implements AIProviderInterface {
   public readonly id = 'gemini';
-  public readonly name = 'Google Gemini 2.5 Cloud Intelligence';
+  public readonly name = 'Google Gemini 2.0 Flash Intelligence';
   public readonly type = 'gemini' as const;
 
   private client: GoogleGenAI | null = null;
@@ -12,7 +12,7 @@ export class GeminiProvider implements AIProviderInterface {
 
   constructor(apiKey?: string, model?: string) {
     this.apiKey = apiKey || process.env.GEMINI_API_KEY || '';
-    this.model = model || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    this.model = model || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
     if (this.apiKey) {
       try {
@@ -55,7 +55,7 @@ export class GeminiProvider implements AIProviderInterface {
         status: 'CONNECTED',
         model: this.model,
         latencyMs,
-        availableModels: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'],
+        availableModels: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
         message: 'Gemini Cloud API healthy and responsive.',
         lastChecked: now,
       };
@@ -72,7 +72,7 @@ export class GeminiProvider implements AIProviderInterface {
   }
 
   public async listModels(): Promise<string[]> {
-    return ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
+    return ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
   }
 
   public async generateText(prompt: string, systemInstruction?: string): Promise<string> {

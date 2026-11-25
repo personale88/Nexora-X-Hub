@@ -20,7 +20,9 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
   const fetchHealth = async () => {
     setIsLoadingHealth(true);
     try {
-      const res = await fetch('/api/ai/health');
+      const savedOllamaUrl = typeof window !== 'undefined' ? localStorage.getItem('repopilot_ollama_url') : null;
+      const url = savedOllamaUrl ? `/api/ai/health?ollama_url=${encodeURIComponent(savedOllamaUrl)}` : '/api/ai/health';
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setAiHealth(data);
@@ -103,7 +105,9 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2 rounded-lg bg-slate-800/80 border border-slate-700/50">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-200">Gemini 2.5</span>
+                    <span className="font-semibold text-slate-200">
+                      {aiHealth?.gemini?.model ? (aiHealth.gemini.model.includes('2.0') ? 'Gemini 2.0' : aiHealth.gemini.model) : 'Gemini 2.0'}
+                    </span>
                     <span
                       className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                         geminiStatus === 'CONNECTED'

@@ -135,6 +135,30 @@ export default function Home() {
                 setActiveTab('issues');
                 if (isTouring) setCurrentTourStep(2);
               }}
+              onStartLiveFix={async () => {
+                try {
+                  const res = await fetch('/api/repair-jobs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      repository: {
+                        name: activeRepo.name,
+                        branch: activeRepo.branch,
+                        gitUrl: activeRepo.gitUrl,
+                      },
+                      issueCode: activeRepo.activeIssueId || 'AI-AUDIT',
+                      issueDescription: `Autonomous investigation & live patch for ${activeRepo.name}`,
+                    }),
+                  });
+                  const d = await res.json();
+                  if (d?.job?.id) {
+                    setActiveJobId(d.job.id);
+                  }
+                } catch (e) {
+                  console.warn('Could not launch live fix:', e);
+                }
+                setActiveTab('live-fix');
+              }}
             />
           )}
 
@@ -153,6 +177,8 @@ export default function Home() {
           {activeTab === 'live-fix' && (
             <LiveBugFixPlayer
               onNavigate={setActiveTab}
+              activeJobId={activeJobId}
+              currentRepo={activeRepo}
               onVerifyFix={() => {
                 setActiveTab('verification');
                 setHasVerifiedFix(true);

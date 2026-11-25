@@ -267,6 +267,75 @@ export function createSession(userId: string): Session {
   return session;
 }
 
+export function rehydrateSession(payload: {
+  userId: string;
+  name: string;
+  email: string | null;
+  avatarUrl: string | null;
+  sessionToken: string;
+  expiresAt: number;
+  githubAccount?: {
+    githubUsername: string;
+    githubId: string;
+    avatarUrl: string;
+    scope: string;
+  };
+}): { user: User; session: Session; connectedGitHub: ConnectedGitHubAccount | null } {
+  const db = ensureDbLoaded();
+  let user = db.users.find((u) => u.id === payload.userId);
+  if (!user) {
+    user = {
+      id: payload.userId,
+      name: payload.name,
+      email: payload.email,
+      avatarUrl: payload.avatarUrl,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.users.push(user);
+  } else {
+    if (payload.name) user.name = payload.name;
+    if (payload.email) user.email = payload.email;
+    if (payload.avatarUrl) user.avatarUrl = payload.avatarUrl;
+  }
+
+  let session = db.sessions.find((s) => s.id === payload.sessionToken);
+  if (!session) {
+    session = {
+      id: payload.sessionToken,
+      userId: payload.userId,
+      expiresAt: payload.expiresAt,
+      createdAt: new Date().toISOString(),
+    };
+    db.sessions.push(session);
+  } else {
+    session.expiresAt = payload.expiresAt;
+  }
+
+  let connectedGitHub: ConnectedGitHubAccount | null = null;
+  if (payload.githubAccount) {
+    connectedGitHub = db.connectedGitHubAccounts.find((c) => c.userId === payload.userId) || null;
+    if (!connectedGitHub) {
+      connectedGitHub = {
+        id: `cgh_${Date.now()}`,
+        userId: payload.userId,
+        githubUsername: payload.githubAccount.githubUsername,
+        githubId: payload.githubAccount.githubId,
+        avatarUrl: payload.githubAccount.avatarUrl,
+        connectedAt: new Date().toISOString(),
+        scope: payload.githubAccount.scope,
+        lastSyncAt: new Date().toISOString(),
+      };
+      db.connectedGitHubAccounts.push(connectedGitHub);
+    }
+  } else {
+    connectedGitHub = db.connectedGitHubAccounts.find((c) => c.userId === payload.userId) || null;
+  }
+
+  persistDb();
+  return { user, session, connectedGitHub };
+}
+
 export function getSession(sessionToken: string): { session: Session; user: User } | null {
   if (!sessionToken) return null;
   const db = ensureDbLoaded();

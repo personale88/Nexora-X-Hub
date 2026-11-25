@@ -30,7 +30,7 @@ class RepoPilotAIEngine {
   public getStatus() {
     return {
       mode: this.config.mode,
-      label: this.config.mode === 'live' ? 'Live LLM Engine' : 'Demo Engine',
+      label: this.config.mode === 'live' ? 'Live LLM Engine' : 'Hybrid Router',
       model: this.config.modelName,
       isConfigured: true,
       hasApiKey: !!this.config.apiKey,

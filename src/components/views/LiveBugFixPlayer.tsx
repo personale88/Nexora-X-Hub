@@ -34,6 +34,8 @@ interface LiveBugFixPlayerProps {
   onNavigate?: (tab: NavTab) => void;
   onVerifyFix?: () => void;
   isEmbedded?: boolean;
+  activeJobId?: string | null;
+  currentRepo?: any;
 }
 
 type StepKey = 'detect' | 'explain' | 'fixing' | 'verified';
@@ -43,6 +45,8 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
   onNavigate,
   onVerifyFix,
   isEmbedded = false,
+  activeJobId = null,
+  currentRepo,
 }) => {
   const [currentStep, setCurrentStep] = useState<StepKey>('detect');
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
@@ -58,33 +62,11 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
   const [isBackendRunning, setIsBackendRunning] = useState<boolean>(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
-  // Dynamic diagnostic & patch state from real backend or verified baseline
-  const [realDiagnosis, setRealDiagnosis] = useState<RepairJobDiagnosis>({
-    rootCause: 'jwt.verify() decoded payload passes truthy condition without enforcing exp timestamp.',
-    affectedFile: 'src/middleware/auth.ts',
-    startLine: 20,
-    endLine: 24,
-    explanation: 'Authentication middleware validates cryptographic token signature but allows expired tokens through downstream.',
-    flawExplanation: 'When developers write jwt.verify(token, SECRET), they assume that if it does not throw, the token is safe to use. However, checking if (decoded) only verifies payload existence and does not assert exp expiration.',
-    attackScenario: 'An attacker or former employee reuses an expired token extracted from browser logs to access protected administrative endpoints.',
-    fixRationale: 'Enforce structural assertion (!decoded || typeof decoded === "string") and explicit expiration validation (decoded.exp * 1000 < Date.now()).',
-    rule: 'Never trust that a decoded JWT is valid simply because it passed a truthy condition. Always assert expiration and audience claims explicitly.',
-    confidence: 97,
-    severity: 'HIGH',
-  });
-
-  const [realPatch, setRealPatch] = useState<RepairJobPatch>({
-    file: PRIMARY_PATCH.file,
-    beforeCode: PRIMARY_PATCH.beforeCode,
-    afterCode: PRIMARY_PATCH.afterCode,
-    unifiedDiff: '',
-    additions: PRIMARY_PATCH.additions,
-    deletions: PRIMARY_PATCH.deletions,
-    explanation: 'Surgical patch applied cleanly to validate token expiration.',
-    appliedSuccessfully: true,
-  });
-  const [pinnedCommit, setPinnedCommit] = useState<string>('7a8f93e');
-  const [repoName, setRepoName] = useState<string>('Nexora-X-Hub');
+  // Dynamic diagnostic & patch state from real backend
+  const [realDiagnosis, setRealDiagnosis] = useState<RepairJobDiagnosis | null>(null);
+  const [realPatch, setRealPatch] = useState<RepairJobPatch | null>(null);
+  const [pinnedCommit, setPinnedCommit] = useState<string>('HEAD');
+  const [repoName, setRepoName] = useState<string>(currentRepo?.name || 'Repository');
 
   // Typewriter streaming state for Step 3 (Live Fix)
   const [typedLinesCount, setTypedLinesCount] = useState<number>(0);
@@ -121,6 +103,105 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
     [playbackSpeed]
   );
 
+  const connectSSE = useCallback((jobId: string) => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const sse = new EventSource(`/api/repair-jobs/${jobId}/events`);
+    eventSourceRef.current = sse;
+
+    sse.onmessage = (e) => {
+      try {
+        const event: RepairEvent = JSON.parse(e.data);
+        setJobEvents((prev) => [...prev, event]);
+
+        if (event.type === 'repository.checkout.completed' || event.type === 'repair.started' || event.type === 'JOB_CREATED') {
+          setCurrentStep('detect');
+        } else if (event.type === 'tests.output' || event.type === 'SANDBOX_INITIALIZED') {
+          setTerminalLogs((prev) => [...prev.slice(-30), event.message]);
+        } else if (event.type === 'analysis.location_found' || event.type === 'SOURCE_FETCH_COMPLETED') {
+          setCurrentStep('detect');
+        } else if ((event.type === 'diagnosis.completed' || event.type === 'ROOT_CAUSE_IDENTIFIED') && event.payload) {
+          setCurrentStep('explain');
+          const diag = event.payload as unknown as RepairJobDiagnosis;
+          setRealDiagnosis(diag);
+        } else if ((event.type === 'patch.applied' || event.type === 'PATCH_GENERATED') && event.payload) {
+          setCurrentStep('fixing');
+          const patchPayload = event.payload as any;
+          setRealPatch({
+            file: patchPayload.file || 'source.ts',
+            beforeCode: patchPayload.beforeCode || '',
+            afterCode: patchPayload.afterCode || '',
+            unifiedDiff: patchPayload.diff || patchPayload.unifiedDiff || '',
+            additions: patchPayload.additions || 0,
+            deletions: patchPayload.deletions || 0,
+            explanation: patchPayload.explanation || 'Patch generated cleanly by RepoPilot AI.',
+            appliedSuccessfully: true,
+          });
+        } else if (event.type === 'repair.verified' || event.type === 'VERIFICATION_COMPLETED') {
+          setCurrentStep('verified');
+          setIsBackendRunning(false);
+          triggerCelebration();
+          sse.close();
+        } else if (event.type === 'repair.failed' || event.type === 'repair.cancelled' || event.type === 'JOB_FAILED') {
+          setIsBackendRunning(false);
+          setBackendError(event.message || 'Job ended.');
+          sse.close();
+        }
+      } catch {
+        // ignore parsing error
+      }
+    };
+
+    sse.onerror = () => {
+      sse.close();
+    };
+  }, [triggerCelebration]);
+
+  const loadJob = useCallback(async (jobId: string) => {
+    setIsBackendRunning(true);
+    setBackendError(null);
+    try {
+      const res = await fetch(`/api/repair-jobs/${jobId}`);
+      if (!res.ok) throw new Error('Repair job not found');
+      const data = await res.json();
+      const job: RepairJob = data.job;
+      if (job) {
+        setActiveJob(job);
+        setRepoName(job.repository.name);
+        setPinnedCommit(job.repository.pinnedCommitSha?.substring(0, 7) || 'HEAD');
+        if (job.diagnosis) {
+          setRealDiagnosis(job.diagnosis);
+        }
+        if (job.proposedPatch) {
+          setRealPatch(job.proposedPatch);
+        }
+        if (job.status === 'VERIFYING' || (job.status as string) === 'COMPLETED' || (job.status as string) === 'VERIFIED') {
+          setCurrentStep('verified');
+          setIsBackendRunning(false);
+        } else if (job.status === 'PATCHING' || (job.status as string) === 'PATCH_GENERATED') {
+          setCurrentStep('fixing');
+        } else if (job.status === 'DIAGNOSING' || job.status === 'INVESTIGATING' || (job.status as string) === 'ANALYZING') {
+          setCurrentStep('explain');
+        }
+
+        if (!['FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(job.status)) {
+          connectSSE(job.id);
+        }
+      }
+    } catch (err: any) {
+      setBackendError(err.message || 'Error loading repair job');
+      setIsBackendRunning(false);
+    }
+  }, [connectSSE]);
+
+  useEffect(() => {
+    if (activeJobId) {
+      loadJob(activeJobId);
+    }
+  }, [activeJobId, loadJob]);
+
   // --------------------------------------------------------------------------
   // REAL BACKEND REPAIR JOB ORCHESTRATION
   // --------------------------------------------------------------------------
@@ -136,9 +217,13 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          issueCode: 'AUTH-104',
-          issueDescription:
-            'AUTH-104: Expired JWT tokens bypass authentication middleware without exp timestamp verification.',
+          repository: {
+            name: currentRepo?.name || 'Nexora-X-Hub',
+            branch: currentRepo?.branch || 'main',
+            gitUrl: currentRepo?.gitUrl,
+          },
+          issueCode: currentRepo?.activeIssueId || 'AI-AUDIT',
+          issueDescription: `Autonomous defect repair for ${currentRepo?.name || 'repository'}`,
         }),
       });
 
@@ -150,65 +235,9 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
       const data = await res.json();
       const job: RepairJob = data.job;
       setActiveJob(job);
-      setPinnedCommit(job.repository.pinnedCommitSha.substring(0, 7));
+      setPinnedCommit(job.repository.pinnedCommitSha?.substring(0, 7) || 'HEAD');
       setRepoName(job.repository.name);
-
-      // Connect real-time Server-Sent Events stream
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-
-      const sse = new EventSource(`/api/repair-jobs/${job.id}/events`);
-      eventSourceRef.current = sse;
-
-      sse.onmessage = (e) => {
-        try {
-          const event: RepairEvent = JSON.parse(e.data);
-          setJobEvents((prev) => [...prev, event]);
-
-          // Transition UI based on genuine backend stage events
-          if (event.type === 'repository.checkout.completed') {
-            setCurrentStep('detect');
-          } else if (event.type === 'tests.output') {
-            setTerminalLogs((prev) => [...prev.slice(-30), event.message]);
-          } else if (event.type === 'analysis.location_found') {
-            setCurrentStep('detect');
-          } else if (event.type === 'diagnosis.completed' && event.payload) {
-            setCurrentStep('explain');
-            const diag = event.payload as unknown as RepairJobDiagnosis;
-            setRealDiagnosis(diag);
-          } else if (event.type === 'patch.applied' && event.payload) {
-            setCurrentStep('fixing');
-            const patchPayload = event.payload as any;
-            setRealPatch({
-              file: patchPayload.file,
-              beforeCode: patchPayload.beforeCode,
-              afterCode: patchPayload.afterCode,
-              unifiedDiff: patchPayload.diff,
-              additions: patchPayload.additions,
-              deletions: patchPayload.deletions,
-              explanation: 'Surgical patch applied cleanly to isolate and resolve AUTH-104.',
-              appliedSuccessfully: true,
-            });
-          } else if (event.type === 'repair.verified') {
-            setCurrentStep('verified');
-            setIsBackendRunning(false);
-            triggerCelebration();
-            sse.close();
-          } else if (event.type === 'repair.failed' || event.type === 'repair.cancelled') {
-            setIsBackendRunning(false);
-            setBackendError(event.message);
-            sse.close();
-          }
-        } catch {
-          // ignore parsing error
-        }
-      };
-
-      sse.onerror = () => {
-        // SSE closed or completed
-        sse.close();
-      };
+      connectSSE(job.id);
     } catch (err: any) {
       setIsBackendRunning(false);
       setBackendError(err.message || 'Error executing repair job');
@@ -304,40 +333,100 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
   };
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(realPatch.afterCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (realPatch?.afterCode) {
+      navigator.clipboard.writeText(realPatch.afterCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
-  // Code Preamble & Postamble
-  const codePreamble = [
-    { num: 14, text: 'export const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {' },
-    { num: 15, text: "  const authHeader = req.headers['authorization'];" },
-    { num: 16, text: "  const token = authHeader && authHeader.split(' ')[1];" },
-    { num: 17, text: "  if (!token) return res.status(401).json({ error: 'Token missing' });" },
-    { num: 18, text: '' },
-    { num: 19, text: '  try {' },
-  ];
+  // If no active job is selected or running, display the prompt's required message
+  if (!activeJobId && !activeJob) {
+    return (
+      <div className={`space-y-6 ${isEmbedded ? '' : 'max-w-4xl mx-auto py-16'}`}>
+        <div className="p-12 text-center rounded-3xl bg-white border border-slate-200 shadow-sm space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto border border-indigo-100 shadow-xs">
+            <Zap className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-slate-900">No active repair job</h2>
+            <p className="text-sm text-slate-600 max-w-md mx-auto">
+              No active repair job. Select an issue from the Issues module to start Live Fix.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => onNavigate && onNavigate('issues')}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              <span>Go to Issues</span>
+            </button>
+            <button
+              onClick={() => onNavigate && onNavigate('repositories')}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-all cursor-pointer"
+            >
+              <span>Back to Repositories</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const buggyCodeLines = [
-    { num: 20, text: '    // BUG AUTH-104: Signature is decoded without validating exp expiration timestamp' },
-    { num: 21, text: '    const decoded = jwt.verify(token, SECRET);' },
-    { num: 22, text: '    if (decoded) {' },
-    { num: 23, text: '      return next();' },
-    { num: 24, text: '    }' },
-  ];
+  const defaultDiagnosis: RepairJobDiagnosis = {
+    rootCause: activeJob?.diagnosis?.rootCause || 'Autonomous AST symbol flow inspection in progress...',
+    affectedFile: activeJob?.diagnosis?.affectedFile || activeJob?.repository.name || 'source.ts',
+    startLine: activeJob?.diagnosis?.startLine || 1,
+    endLine: activeJob?.diagnosis?.endLine || 10,
+    explanation: activeJob?.diagnosis?.explanation || 'AI analyzing source tree and dependencies.',
+    flawExplanation: activeJob?.diagnosis?.flawExplanation || 'Inspecting AST references for logic flaws and security vulnerabilities.',
+    attackScenario: activeJob?.diagnosis?.attackScenario || 'Simulating automated attack and boundary condition tests in sandbox.',
+    fixRationale: activeJob?.diagnosis?.fixRationale || 'Synthesizing minimal surgical diff to validate assertions.',
+    rule: activeJob?.diagnosis?.rule || 'Enforce strict schema validation and explicit boundary assertion across API handlers.',
+    confidence: activeJob?.diagnosis?.confidence || 95,
+    severity: activeJob?.diagnosis?.severity || 'HIGH',
+  };
 
-  const fixedReplacementLines = realPatch.afterCode.split('\n').map((line, idx) => ({
-    num: 20 + idx,
-    text: line.startsWith('    ') ? line : `    ${line}`,
-  }));
+  const defaultPatch: RepairJobPatch = {
+    file: activeJob?.proposedPatch?.file || activeJob?.diagnosis?.affectedFile || 'source.ts',
+    beforeCode: activeJob?.proposedPatch?.beforeCode || '// Loading repository context...',
+    afterCode: activeJob?.proposedPatch?.afterCode || '// Synthesizing fix patch...',
+    unifiedDiff: activeJob?.proposedPatch?.unifiedDiff || '',
+    additions: activeJob?.proposedPatch?.additions || 0,
+    deletions: activeJob?.proposedPatch?.deletions || 0,
+    explanation: activeJob?.proposedPatch?.explanation || 'Autonomous surgical repair generated by RepoPilot AI.',
+    appliedSuccessfully: true,
+  };
 
-  const codePostamble = [
-    { num: 20 + fixedReplacementLines.length, text: '  } catch (err) {' },
-    { num: 21 + fixedReplacementLines.length, text: "    return res.status(403).json({ error: 'Invalid token signature' });" },
-    { num: 22 + fixedReplacementLines.length, text: '  }' },
-    { num: 23 + fixedReplacementLines.length, text: '};' },
-  ];
+  const activeDiagnosis = realDiagnosis || defaultDiagnosis;
+  const activePatch = realPatch || defaultPatch;
+
+  const filePath = activePatch.file || activeDiagnosis.affectedFile || 'src/index.ts';
+  const fileName = filePath.split('/').pop() || 'index.ts';
+  const fileDir = filePath.substring(0, filePath.lastIndexOf('/') + 1);
+
+  const buggyCodeLines = activePatch.beforeCode
+    ? activePatch.beforeCode.split('\n').map((line, idx) => ({
+        num: activeDiagnosis.startLine + idx,
+        text: line,
+      }))
+    : [
+        { num: 1, text: '// Analyzing repository source code...' },
+        { num: 2, text: '// Live AST symbols being retrieved...' },
+      ];
+
+  const fixedReplacementLines = activePatch.afterCode
+    ? activePatch.afterCode.split('\n').map((line, idx) => ({
+        num: activeDiagnosis.startLine + idx,
+        text: line,
+      }))
+    : [
+        { num: 1, text: '// Generating patch from autonomous AI model...' },
+      ];
+
+  const codePreamble: { num: number; text: string }[] = [];
+  const codePostamble: { num: number; text: string }[] = [];
 
   return (
     <div className={`space-y-6 ${isEmbedded ? '' : 'max-w-7xl mx-auto pb-16'}`}>
@@ -350,14 +439,14 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
               Autonomous Debugging &amp; Repair Engine
             </span>
             <span className="text-xs font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded">
-              AUTH-104
+              {activeJob?.issueCode || 'AI-INSPECT'}
             </span>
             <span className="text-xs font-mono text-slate-500 flex items-center gap-1">
               <GitCommit className="w-3.5 h-3.5 text-indigo-500" />
               <span>{repoName}@{pinnedCommit}</span>
             </span>
             <span className="text-xs font-mono text-slate-400">
-              {realDiagnosis.affectedFile} (L{realDiagnosis.startLine}–L{realDiagnosis.endLine})
+              {filePath} {realDiagnosis ? `(L${realDiagnosis.startLine}–L${realDiagnosis.endLine})` : ''}
             </span>
           </div>
 
@@ -542,8 +631,8 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
               </div>
               <div className="flex items-center gap-1.5 text-xs font-mono text-slate-300">
                 <FileCode className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="font-semibold text-white">auth.ts</span>
-                <span className="text-slate-500">src/middleware/</span>
+                <span className="font-semibold text-white">{fileName}</span>
+                <span className="text-slate-500">{fileDir}</span>
               </div>
             </div>
 
@@ -552,7 +641,7 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
               {currentStep === 'detect' && (
                 <span className="text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5 animate-pulse">
                   <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  BUG ACTIVE (L{realDiagnosis.startLine}–L{realDiagnosis.endLine})
+                  BUG ACTIVE {realDiagnosis ? `(L${realDiagnosis.startLine}–L${realDiagnosis.endLine})` : ''}
                 </span>
               )}
               {currentStep === 'explain' && (
@@ -599,7 +688,7 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
                 {/* Floating Alert Tag */}
                 <div className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
                   <AlertTriangle className="w-3 h-3" />
-                  <span>Vulnerability Located Here (Line {realDiagnosis.startLine + 2})</span>
+                  <span>Vulnerability Located Here (Line {activeDiagnosis.startLine})</span>
                 </div>
 
                 {buggyCodeLines.map((line) => (
@@ -682,7 +771,7 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
               <div className="my-1 py-1.5 rounded-xl bg-emerald-950/40 border-2 border-emerald-500/70 shadow-lg relative animate-in fade-in duration-300">
                 <div className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
                   <CheckCircle2 className="w-3 h-3" />
-                  <span>Secure Fix Applied &amp; Verified (+{realPatch.additions} / -{realPatch.deletions})</span>
+                  <span>Secure Fix Applied &amp; Verified (+{activePatch.additions} / -{activePatch.deletions})</span>
                 </div>
 
                 {fixedReplacementLines.map((line) => (
@@ -763,13 +852,13 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
                     Learner Compass &amp; Explanation
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Grounded in actual repository diagnosis ({realDiagnosis.severity} Risk)
+                    Grounded in actual repository diagnosis ({activeDiagnosis.severity} Risk)
                   </p>
                 </div>
               </div>
 
               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                Confidence: {realDiagnosis.confidence}%
+                Confidence: {activeDiagnosis.confidence}%
               </span>
             </div>
 
@@ -801,17 +890,17 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
                 <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200 text-xs text-rose-900 space-y-2">
                   <div className="font-bold flex items-center gap-1.5 text-rose-800">
                     <AlertTriangle className="w-4 h-4 text-rose-600" />
-                    <span>The Flaw in Line {realDiagnosis.startLine + 2}</span>
+                    <span>The Flaw in Line {activeDiagnosis.startLine}</span>
                   </div>
                   <p className="leading-relaxed text-slate-700">
-                    {realDiagnosis.flawExplanation}
+                    {activeDiagnosis.flawExplanation}
                   </p>
                 </div>
 
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
                   <span className="font-bold text-slate-800">Root Cause:</span>
                   <div className="font-mono text-indigo-700 bg-white p-2 rounded border border-slate-200 text-[11px]">
-                    {realDiagnosis.rootCause}
+                    {activeDiagnosis.rootCause}
                   </div>
                 </div>
               </div>
@@ -826,7 +915,7 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
                     <span>Attack Scenario</span>
                   </div>
                   <p className="text-slate-700 leading-relaxed">
-                    {realDiagnosis.attackScenario}
+                    {activeDiagnosis.attackScenario}
                   </p>
                 </div>
               </div>
@@ -841,7 +930,7 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
                     <span>Fix Rationale</span>
                   </div>
                   <p className="leading-relaxed text-slate-700">
-                    {realDiagnosis.fixRationale}
+                    {activeDiagnosis.fixRationale}
                   </p>
                 </div>
               </div>
@@ -856,7 +945,7 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
                     <span>Developer Golden Rule</span>
                   </div>
                   <blockquote className="italic border-l-2 border-indigo-400 pl-2.5 py-1 text-slate-800 font-medium">
-                    &ldquo;{realDiagnosis.rule}&rdquo;
+                    &ldquo;{activeDiagnosis.rule}&rdquo;
                   </blockquote>
                 </div>
               </div>
@@ -873,7 +962,7 @@ export const LiveBugFixPlayer: React.FC<LiveBugFixPlayerProps> = ({
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 text-[10px] block">Line Delta</span>
-                <span className="font-mono font-bold text-slate-800">+{realPatch.additions} / -{realPatch.deletions} lines</span>
+                <span className="font-mono font-bold text-slate-800">+{activePatch.additions} / -{activePatch.deletions} lines</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-slate-500 text-[10px] block">Regression Risk</span>

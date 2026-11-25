@@ -13,6 +13,16 @@ export class OllamaProvider implements AIProviderInterface {
     this.model = model || process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b';
   }
 
+  public setBaseUrl(url: string): void {
+    if (url && typeof url === 'string') {
+      this.baseUrl = url.trim().replace(/\/$/, '');
+    }
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   public async healthCheck(): Promise<ProviderHealth> {
     const now = new Date().toISOString();
     const start = Date.now();

@@ -25,6 +25,7 @@ interface RepositoryViewProps {
   onInvestigateIssue: () => void;
   currentRepo?: RepositoryData;
   onOpenRepoModal?: () => void;
+  onStartLiveFix?: () => void;
 }
 
 function pathsToFileNodes(paths: string[]): FileNode[] {
@@ -67,6 +68,7 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
   onInvestigateIssue,
   currentRepo = ACTIVE_REPO,
   onOpenRepoModal,
+  onStartLiveFix,
 }) => {
   const isDemoRepo = currentRepo?.name === 'commerce-api' || currentRepo?.name === 'sample-vulnerable-repo';
 
@@ -164,11 +166,10 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
         <div
           key={node.path}
           onClick={() => setSelectedFile(node)}
-          className={`flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-xs font-mono transition-all ${
-            isSelected
+          className={`flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer text-xs font-mono transition-all ${isSelected
               ? 'bg-indigo-50 text-indigo-900 font-semibold border border-indigo-200'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-          }`}
+            }`}
           style={{ paddingLeft: `${depth * 14 + 14}px` }}
         >
           <div className="flex items-center gap-2 truncate">
@@ -400,8 +401,14 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
 
             <div className="flex flex-col sm:flex-row items-center gap-2.5">
               <button
-                onClick={() => onNavigate('live-fix')}
-                className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+                onClick={() => {
+                  if (onStartLiveFix) {
+                    onStartLiveFix();
+                  } else {
+                    onNavigate('live-fix');
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-semibold text-sm shadow-md shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap cursor-pointer"
               >
                 <Zap className="w-4 h-4 text-cyan-300" />
                 <span>Watch Live Fix &amp; Learn</span>
@@ -474,11 +481,10 @@ export const RepositoryView: React.FC<RepositoryViewProps> = ({
                   return (
                     <div
                       key={idx}
-                      className={`flex items-start gap-4 px-2 py-0.5 rounded ${
-                        isBugLine
+                      className={`flex items-start gap-4 px-2 py-0.5 rounded ${isBugLine
                           ? 'bg-rose-100/80 text-rose-950 border-l-4 border-rose-500 font-medium'
                           : 'hover:bg-slate-200/50'
-                      }`}
+                        }`}
                     >
                       <span className="text-slate-400 select-none w-6 text-right shrink-0">
                         {lineNum}

@@ -36,8 +36,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   openSettings,
   hasVerifiedFix = false,
 }) => {
-  const engineStatus = aiEngine.getStatus();
   const { user, isAuthenticated } = useAuth();
+  const [aiMode, setAiMode] = React.useState<string>('hybrid');
+
+  React.useEffect(() => {
+    fetch('/api/ai/health')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.activeMode) setAiMode(d.activeMode);
+      })
+      .catch(() => {});
+  }, []);
 
   const navItems = [
     {
@@ -222,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              {engineStatus.label}
+              {aiMode === 'gemini' ? 'Gemini 2.0' : aiMode === 'ollama' ? 'Ollama Local' : 'Hybrid Router'}
             </span>
           </div>
 

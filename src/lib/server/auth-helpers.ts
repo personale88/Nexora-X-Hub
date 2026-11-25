@@ -1,21 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, User, Session, getConnectedGitHubAccount, ConnectedGitHubAccount, getOAuthAccountsByUserId } from './db';
+import {
+  getSession,
+  User,
+  Session,
+  getConnectedGitHubAccount,
+  ConnectedGitHubAccount,
+  getOAuthAccountsByUserId,
+  rehydrateSession,
+  getUserById,
+} from './db';
+import { encryptToken, decryptToken } from './crypto';
 
 export const SESSION_COOKIE_NAME = 'repopilot_session';
 export const OAUTH_STATE_COOKIE_NAME = 'repopilot_oauth_state';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+export interface EncryptedSessionPayload {
+  sessionToken: string;
+  userId: string;
+  email: string | null;
+  name: string;
+  avatarUrl: string | null;
+  expiresAt: number;
+  githubAccount?: {
+    githubUsername: string;
+    githubId: string;
+    avatarUrl: string;
+    scope: string;
+  };
+}
+
 /**
  * Retrieve the current authenticated user and session from request cookies.
+ * Supports self-contained encrypted stateless session tokens with automatic
+ * database re-hydration across serverless Vercel lambda instances.
  */
 export async function getAuthenticatedUser(
   req: NextRequest
 ): Promise<{ user: User; session: Session; connectedGitHub: ConnectedGitHubAccount | null } | null> {
-  const sessionToken = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (!sessionToken) return null;
+  const cookieValue = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (!cookieValue) return null;
 
-  const result = getSession(sessionToken);
+  // 1. Try to decrypt as self-contained stateless session payload
+  try {
+    const decrypted = decryptToken(cookieValue);
+    if (decrypted) {
+      const payload: EncryptedSessionPayload = JSON.parse(decrypted);
+      if (payload && payload.userId && payload.sessionToken && payload.expiresAt && Date.now() < payload.expiresAt) {
+        return rehydrateSession(payload);
+      }
+    }
+  } catch (err) {
+    // Not an encrypted payload or decryption failed; fallback to raw db lookup below
+  }
+
+  // 2. Direct database session lookup (fallback for raw tokens or development)
+  const result = getSession(cookieValue);
   if (!result) return null;
 
   const connectedGitHub = getConnectedGitHubAccount(result.user.id);
@@ -50,11 +91,44 @@ export async function requireAuth(
 
 /**
  * Attach secure HttpOnly session cookie to response.
+ * Automatically wraps user & session into an AES-256-GCM encrypted stateless payload
+ * so authentication is 100% persistent across page refreshes and serverless lambdas.
  */
-export function setSessionCookie(res: NextResponse, sessionToken: string): void {
+export function setSessionCookie(
+  res: NextResponse,
+  sessionToken: string,
+  user?: User | null,
+  connectedGitHub?: ConnectedGitHubAccount | null
+): void {
+  let cookieVal = sessionToken;
+
+  // Look up user if not provided directly
+  const resolvedUser = user || (getSession(sessionToken)?.user ?? null);
+  const resolvedGh = connectedGitHub !== undefined ? connectedGitHub : (resolvedUser ? getConnectedGitHubAccount(resolvedUser.id) : null);
+
+  if (resolvedUser) {
+    const payload: EncryptedSessionPayload = {
+      sessionToken,
+      userId: resolvedUser.id,
+      email: resolvedUser.email,
+      name: resolvedUser.name,
+      avatarUrl: resolvedUser.avatarUrl,
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+      githubAccount: resolvedGh
+        ? {
+            githubUsername: resolvedGh.githubUsername,
+            githubId: resolvedGh.githubId,
+            avatarUrl: resolvedGh.avatarUrl,
+            scope: resolvedGh.scope,
+          }
+        : undefined,
+    };
+    cookieVal = encryptToken(JSON.stringify(payload));
+  }
+
   res.cookies.set({
     name: SESSION_COOKIE_NAME,
-    value: sessionToken,
+    value: cookieVal,
     httpOnly: true,
     secure: isProduction,
     sameSite: 'lax',
