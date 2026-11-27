@@ -60,8 +60,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setIsLoadingHealth(true);
-      const savedOllama = typeof window !== 'undefined' ? localStorage.getItem('repopilot_ollama_url') : '';
-      if (savedOllama) setOllamaUrlInput(savedOllama);
+      let savedOllama = typeof window !== 'undefined' ? localStorage.getItem('repopilot_ollama_url') || '' : '';
+      if (!savedOllama || savedOllama.includes('tiny-peaches') || savedOllama.includes('eighty-flies')) {
+        savedOllama = 'https://repopilot-vignesh-ollama.loca.lt';
+      }
+      setOllamaUrlInput(savedOllama);
       const query = savedOllama ? `?ollama_url=${encodeURIComponent(savedOllama)}` : '';
 
       fetch(`/api/ai/health${query}`)
@@ -208,6 +211,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500">Gemini 3.5 Flash cloud reasoning</p>
+                {healthData?.gemini?.message && healthData.gemini.status !== 'CONNECTED' && (
+                  <p className="text-[10px] text-rose-600 font-mono mt-1 truncate" title={healthData.gemini.message}>
+                    {healthData.gemini.message}
+                  </p>
+                )}
               </button>
 
               {/* Ollama Provider */}
@@ -276,7 +284,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="text"
                   value={ollamaUrlInput}
                   onChange={(e) => setOllamaUrlInput(e.target.value)}
-                  placeholder="e.g. https://tiny-peaches-end.loca.lt or http://127.0.0.1:11434"
+                  placeholder="https://repopilot-vignesh-ollama.loca.lt or http://127.0.0.1:11434"
                   className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <button
@@ -288,8 +296,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {isSavingOllamaUrl ? 'Testing...' : 'Save & Connect'}
                 </button>
               </div>
+              {healthData?.ollama?.message && (
+                <p className={`text-[11px] font-mono p-2 rounded border ${
+                  healthData.ollama.status === 'CONNECTED'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  {healthData.ollama.message}
+                </p>
+              )}
               <p className="text-[11px] text-slate-500 leading-normal">
-                To connect your local Ollama on Vercel: run <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">npx localtunnel --port 11434</code> in CMD and paste your generated URL here.
+                To connect your local Ollama on Vercel: run <code className="bg-slate-200 px-1 py-0.5 rounded text-[10px]">npx localtunnel --port 11434 --subdomain repopilot-vignesh-ollama</code> in CMD and paste your generated URL here.
               </p>
             </div>
 
